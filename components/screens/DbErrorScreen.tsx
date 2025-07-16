@@ -52,7 +52,6 @@ BEGIN
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       created_at timestamp with time zone DEFAULT now() NOT NULL,
       name text NOT NULL UNIQUE,
-      capacity integer NOT NULL,
       location text,
       type_id uuid NOT NULL
     );
@@ -69,6 +68,11 @@ BEGIN
       UPDATE public.environments e SET type_id = et.id FROM public.environment_types et WHERE e.type = et.name;
       ALTER TABLE public.environments DROP COLUMN type;
       ALTER TABLE public.environments ALTER COLUMN type_id SET NOT NULL;
+    END IF;
+    
+    -- Remove a coluna capacity se ela existir
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='environments' AND column_name='capacity') THEN
+      ALTER TABLE public.environments DROP COLUMN capacity;
     END IF;
 
     -- Remove a coluna antiga 'resources' (array de texto) se ela existir
@@ -130,11 +134,11 @@ INSERT INTO public.resources (name) VALUES
 ON CONFLICT (name) DO NOTHING;
 
 -- Inserir ambientes e recursos de forma segura
-INSERT INTO public.environments (name, type_id, capacity, location) VALUES
-('Sala de Aula 101', (SELECT id from public.environment_types WHERE name = 'Sala de Aula'), 40, 'Bloco A, 1º Andar'),
-('Laboratório de Informática B', (SELECT id from public.environment_types WHERE name = 'Laboratório'), 25, 'Bloco C, Térreo'),
-('Auditório Principal', (SELECT id from public.environment_types WHERE name = 'Auditório'), 200, 'Prédio Central'),
-('Sala de Reunião 3', (SELECT id from public.environment_types WHERE name = 'Sala de Reunião'), 12, 'Bloco Administrativo')
+INSERT INTO public.environments (name, type_id, location) VALUES
+('Sala de Aula 101', (SELECT id from public.environment_types WHERE name = 'Sala de Aula'), 'Bloco A, 1º Andar'),
+('Laboratório de Informática B', (SELECT id from public.environment_types WHERE name = 'Laboratório'), 'Bloco C, Térreo'),
+('Auditório Principal', (SELECT id from public.environment_types WHERE name = 'Auditório'), 'Prédio Central'),
+('Sala de Reunião 3', (SELECT id from public.environment_types WHERE name = 'Sala de Reunião'), 'Bloco Administrativo')
 ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO public.environment_resources (environment_id, resource_id)

@@ -25,7 +25,6 @@ export interface Environment {
   id: string;
   created_at: string;
   name: string;
-  capacity: number;
   location: string | null;
   type_id: string;
   environment_types: { name: string } | null;

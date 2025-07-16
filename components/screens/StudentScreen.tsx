@@ -168,7 +168,7 @@ const AllEnvironmentsView: React.FC<{environments: Environment[], canManageReser
                         <div key={env.id} className="bg-gray-50 p-4 rounded-lg flex flex-col md:flex-row justify-between md:items-center gap-4 hover:shadow-md transition-shadow">
                             <div>
                                 <h3 className="text-xl font-bold text-estacio-blue">{env.name} <span className="text-base font-normal text-gray-600">- {env.environment_types?.name}</span></h3>
-                                <p className="text-sm text-gray-500">{env.location} | Capacidade: {env.capacity}</p>
+                                <p className="text-sm text-gray-500">{env.location}</p>
                                 <p className="text-sm text-gray-500">Recursos: {env.resources?.map(r => r.name).join(', ') || 'N/A'}</p>
                             </div>
                             <button onClick={() => onReserveClick(env)} className="bg-estacio-red text-white font-bold py-2 px-4 rounded-lg hover:bg-opacity-90 transition-transform transform hover:scale-105 self-end md:self-center">

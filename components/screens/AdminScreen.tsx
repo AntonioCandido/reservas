@@ -81,7 +81,7 @@ const AdminScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, se
   return (
     <div className="container mx-auto p-4 md:p-8">
       <header className="flex justify-between items-center mb-8">
-        <h1 className="text-4xl font-bold text-gray-800">Painel do Administrador</h1>
+        <h1 className="text-4xl font-bold text-gray-800">Manager</h1>
         <div className="flex items-center gap-4">
             <div className="text-center">
                 <button onClick={() => setIsProfileModalOpen(true)} className="flex items-center justify-center h-10 w-10 bg-gray-200 text-gray-700 hover:bg-gray-300 rounded-full transition-colors" aria-label="Editar Perfil">
@@ -312,7 +312,7 @@ const EnvironmentsAdminView: React.FC<{ environments: Environment[], types: Envi
                 <div className="space-y-3 border-t pt-4 border-gray-200">
                     {environments.map(env => (
                         <div key={env.id} onClick={() => setEnvToView(env)} className="bg-gray-50 p-4 rounded-lg flex justify-between items-center gap-4 hover:shadow-md transition-shadow cursor-pointer">
-                            <div><p className="font-bold text-gray-800">{env.name} <span className="font-normal text-gray-500">- {env.environment_types?.name}</span></p><p className="text-sm text-gray-600">{env.location} | Cap: {env.capacity} | Recursos: {env.resources?.map(r => r.name).join(', ') || 'N/A'}</p></div>
+                            <div><p className="font-bold text-gray-800">{env.name} <span className="font-normal text-gray-500">- {env.environment_types?.name}</span></p><p className="text-sm text-gray-600">{env.location} | Recursos: {env.resources?.map(r => r.name).join(', ') || 'N/A'}</p></div>
                             <div className="flex items-center gap-2"><button onClick={(e) => { e.stopPropagation(); setEnvToEdit(env); }} className="bg-blue-100 text-blue-600 h-10 w-10 flex items-center justify-center rounded-full"><i className="bi bi-pencil-square"></i></button><button onClick={(e) => { e.stopPropagation(); setEnvToDelete(env); }} className="bg-red-100 text-red-600 h-10 w-10 flex items-center justify-center rounded-full"><i className="bi bi-trash"></i></button></div>
                         </div>
                     ))}
@@ -353,20 +353,20 @@ const ItemEditModal: React.FC<{ isOpen: boolean; onClose: () => void; item: {id:
 const EnvironmentAddForm: React.FC<{ isOpen: boolean, setIsOpen: (b: boolean) => void, types: EnvironmentType[], resources: Resource[], refreshData: () => Promise<void> }> = ({ isOpen, setIsOpen, types, resources, refreshData }) => {
     const [isAdding, setIsAdding] = useState(false);
     const [error, setError] = useState('');
-    const [formState, setFormState] = useState({ name: '', capacity: 0, location: '', type_id: ''});
+    const [formState, setFormState] = useState({ name: '', location: '', type_id: ''});
     const [selectedResources, setSelectedResources] = useState<string[]>([]);
     
     const handleAddEnvironment = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!formState.name || !formState.type_id || formState.capacity <= 0) {
-            setError('Nome, tipo e capacidade são obrigatórios.');
+        if (!formState.name || !formState.type_id) {
+            setError('Nome e tipo são obrigatórios.');
             return;
         }
         setIsAdding(true);
         setError('');
         try {
             await addEnvironment({ ...formState }, selectedResources);
-            setFormState({ name: '', capacity: 0, location: '', type_id: '' });
+            setFormState({ name: '', location: '', type_id: '' });
             setSelectedResources([]);
             setIsOpen(false);
             await refreshData();
@@ -383,7 +383,6 @@ const EnvironmentAddForm: React.FC<{ isOpen: boolean, setIsOpen: (b: boolean) =>
             <div className={`transition-all duration-500 ease-in-out ${isOpen ? 'max-h-[1000px]' : 'max-h-0'}`}>
                 <div className="px-6 pb-6"><form onSubmit={handleAddEnvironment} className="space-y-4 border-t pt-6 border-gray-200">
                     <FormField label="Nome do Ambiente" name="name" value={formState.name} onChange={(e) => setFormState(p => ({ ...p, name: e.target.value }))} required />
-                    <FormField label="Capacidade" name="capacity" type="number" min="1" value={formState.capacity} onChange={(e) => setFormState(p => ({ ...p, capacity: parseInt(e.target.value) || 0 }))} required />
                     <FormField label="Localização" name="location" value={formState.location} onChange={(e) => setFormState(p => ({ ...p, location: e.target.value }))} />
                     <div><label className="block text-sm font-medium text-gray-700 mb-1">Tipo</label><select name="type_id" value={formState.type_id} onChange={(e) => setFormState(p => ({...p, type_id: e.target.value}))} required className="w-full p-2 border border-gray-300 rounded-md"><option value="">Selecione um tipo</option>{types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
                     <div><label className="block text-sm font-medium text-gray-700 mb-1">Recursos</label><div className="flex flex-wrap gap-2 p-2 border rounded-md">{resources.map(r => <label key={r.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={selectedResources.includes(r.id)} onChange={() => setSelectedResources(p => p.includes(r.id) ? p.filter(id => id !== r.id) : [...p, r.id])} />{r.name}</label>)}</div></div>
@@ -395,14 +394,14 @@ const EnvironmentAddForm: React.FC<{ isOpen: boolean, setIsOpen: (b: boolean) =>
 }
 
 const EnvironmentEditModal: React.FC<{ isOpen: boolean, onClose: () => void, environment: Environment, onSave: Function, types: EnvironmentType[], resources: Resource[] }> = ({ isOpen, onClose, environment, onSave, types, resources }) => {
-    const [formState, setFormState] = useState({ name: '', capacity: 0, location: '', type_id: '' });
+    const [formState, setFormState] = useState({ name: '', location: '', type_id: '' });
     const [selectedResources, setSelectedResources] = useState<string[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState('');
 
     useEffect(() => {
         if (environment) {
-            setFormState({ name: environment.name, capacity: environment.capacity, location: environment.location || '', type_id: environment.type_id });
+            setFormState({ name: environment.name, location: environment.location || '', type_id: environment.type_id });
             setSelectedResources(environment.resources.map(r => r.id));
             setError('');
         }
@@ -411,8 +410,8 @@ const EnvironmentEditModal: React.FC<{ isOpen: boolean, onClose: () => void, env
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
-        if (!formState.name || !formState.type_id || formState.capacity <= 0) {
-            setError('Nome, tipo e capacidade são obrigatórios.'); return;
+        if (!formState.name || !formState.type_id) {
+            setError('Nome e tipo são obrigatórios.'); return;
         }
         setIsSaving(true);
         try { await onSave(environment.id, formState, selectedResources); }
@@ -424,7 +423,6 @@ const EnvironmentEditModal: React.FC<{ isOpen: boolean, onClose: () => void, env
         <Modal isOpen={isOpen} onClose={onClose} title={`Editar: ${environment.name}`}>
             <form onSubmit={handleSubmit} className="space-y-4 max-h-[75vh] overflow-y-auto pr-2">
                 <FormField label="Nome do Ambiente" value={formState.name} onChange={(e) => setFormState(p => ({ ...p, name: e.target.value }))} required />
-                <FormField label="Capacidade" type="number" min="1" value={formState.capacity} onChange={(e) => setFormState(p => ({ ...p, capacity: parseInt(e.target.value) || 0 }))} required />
                 <FormField label="Localização" value={formState.location} onChange={(e) => setFormState(p => ({ ...p, location: e.target.value }))} />
                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Tipo</label><select value={formState.type_id} onChange={(e) => setFormState(p => ({...p, type_id: e.target.value}))} required className="w-full p-2 border border-gray-300 rounded-md"><option value="">Selecione um tipo</option>{types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Recursos</label><div className="flex flex-wrap gap-2 p-2 border rounded-md">{resources.map(r => <label key={r.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={selectedResources.includes(r.id)} onChange={() => setSelectedResources(p => p.includes(r.id) ? p.filter(id => id !== r.id) : [...p, r.id])} />{r.name}</label>)}</div></div>
@@ -517,7 +515,7 @@ const EnvironmentDetailsModal: React.FC<{ isOpen: boolean; onClose: () => void; 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={`Detalhes de ${environment.name}`}>
             <div className="max-h-[75vh] overflow-y-auto pr-2 space-y-4">
-                <div className="grid grid-cols-2 gap-x-4 border-b pb-4"><DetailItem label="Tipo" value={environment.environment_types?.name} /><DetailItem label="Capacidade" value={environment.capacity} /><DetailItem label="Localização" value={environment.location} /><DetailItem label="Recursos" value={environment.resources?.map(r => r.name).join(', ')} /></div>
+                <div className="grid grid-cols-2 gap-x-4 border-b pb-4"><DetailItem label="Tipo" value={environment.environment_types?.name} /><DetailItem label="Localização" value={environment.location} /><DetailItem label="Recursos" value={environment.resources?.map(r => r.name).join(', ')} /></div>
                 <div><h4 className="text-lg font-semibold text-gray-800 mb-2">Próximas Reservas</h4>{isLoading ? <Spinner/> : <ul className="space-y-2">{reservations.length > 0 ? reservations.map(res => <li key={res.id} className="bg-blue-50 p-3 rounded-md text-sm"><p className="font-bold">{res.users?.name}</p><p>{new Date(res.start_time).toLocaleString('pt-BR')} - {new Date(res.end_time).toLocaleTimeString('pt-BR')}</p></li>) : <p className="text-center p-4">Nenhuma reserva.</p>}</ul>}</div>
             </div>
         </Modal>
