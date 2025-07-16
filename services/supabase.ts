@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 import type { User, Environment, Reservation, EnvironmentType, Resource } from '../types';
 import { UserRole } from '../constants';
@@ -7,189 +8,190 @@ export type Database = {
     Tables: {
       environments: {
         Row: {
-          created_at: string;
-          id: string;
-          location: string | null;
-          name: string;
-          type_id: string;
-        };
+          created_at: string
+          id: string
+          location: string | null
+          name: string
+          type_id: string
+        }
         Insert: {
-          created_at?: string;
-          id?: string;
-          location?: string | null;
-          name: string;
-          type_id: string;
-        };
+          created_at?: string
+          id?: string
+          location?: string | null
+          name: string
+          type_id: string
+        }
         Update: {
-          created_at?: string;
-          id?: string;
-          location?: string | null;
-          name?: string;
-          type_id?: string;
-        };
+          created_at?: string
+          id?: string
+          location?: string | null
+          name?: string
+          type_id?: string
+        }
         Relationships: [
           {
-            foreignKeyName: "environments_type_id_fkey";
-            columns: ["type_id"];
-            isOneToOne: false;
-            referencedRelation: "environment_types";
-            referencedColumns: ["id"];
+            foreignKeyName: "environments_type_id_fkey"
+            columns: ["type_id"]
+            isOneToOne: false
+            referencedRelation: "environment_types"
+            referencedColumns: ["id"]
           },
-        ];
-      };
+        ]
+      }
       environment_resources: {
         Row: {
-          environment_id: string;
-          resource_id: string;
-        };
+          environment_id: string
+          resource_id: string
+        }
         Insert: {
-          environment_id: string;
-          resource_id: string;
-        };
+          environment_id: string
+          resource_id: string
+        }
         Update: {
-          environment_id?: string;
-          resource_id?: string;
-        };
+          environment_id?: string
+          resource_id?: string
+        }
         Relationships: [
           {
-            foreignKeyName: "environment_resources_environment_id_fkey";
-            columns: ["environment_id"];
-            isOneToOne: false;
-            referencedRelation: "environments";
-            referencedColumns: ["id"];
+            foreignKeyName: "environment_resources_environment_id_fkey"
+            columns: ["environment_id"]
+            isOneToOne: false
+            referencedRelation: "environments"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "environment_resources_resource_id_fkey";
-            columns: ["resource_id"];
-            isOneToOne: false;
-            referencedRelation: "resources";
-            referencedColumns: ["id"];
+            foreignKeyName: "environment_resources_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "resources"
+            referencedColumns: ["id"]
           },
-        ];
-      };
+        ]
+      }
       environment_types: {
         Row: {
-          created_at: string;
-          id: string;
-          name: string;
-        };
+          created_at: string
+          id: string
+          name: string
+        }
         Insert: {
-          created_at?: string;
-          id?: string;
-          name: string;
-        };
+          created_at?: string
+          id?: string
+          name: string
+        }
         Update: {
-          created_at?: string;
-          id?: string;
-          name?: string;
-        };
-        Relationships: [];
-      };
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       reservations: {
         Row: {
-          created_at: string;
-          end_time: string;
-          environment_id: string;
-          id: string;
-          start_time: string;
-          status: string;
-          user_id: string;
-        };
+          created_at: string
+          end_time: string
+          environment_id: string
+          id: string
+          start_time: string
+          status: Database["public"]["Enums"]["appreservationstatus"]
+          user_id: string
+        }
         Insert: {
-          created_at?: string;
-          end_time: string;
-          environment_id: string;
-          id?: string;
-          start_time: string;
-          status?: string;
-          user_id: string;
-        };
+          created_at?: string
+          end_time: string
+          environment_id: string
+          id?: string
+          start_time: string
+          status?: Database["public"]["Enums"]["appreservationstatus"]
+          user_id: string
+        }
         Update: {
-          created_at?: string;
-          end_time?: string;
-          environment_id?: string;
-          id?: string;
-          start_time?: string;
-          status?: string;
-          user_id?: string;
-        };
+          created_at?: string
+          end_time?: string
+          environment_id?: string
+          id?: string
+          start_time?: string
+          status?: Database["public"]["Enums"]["appreservationstatus"]
+          user_id?: string
+        }
         Relationships: [
           {
-            foreignKeyName: "reservations_environment_id_fkey";
-            columns: ["environment_id"];
-            isOneToOne: false;
-            referencedRelation: "environments";
-            referencedColumns: ["id"];
+            foreignKeyName: "reservations_environment_id_fkey"
+            columns: ["environment_id"]
+            isOneToOne: false
+            referencedRelation: "environments"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "reservations_user_id_fkey";
-            columns: ["user_id"];
-            isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            foreignKeyName: "reservations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
           },
-        ];
-      };
+        ]
+      }
       resources: {
         Row: {
-          created_at: string;
-          id: string;
-          name: string;
-        };
+          created_at: string
+          id: string
+          name: string
+        }
         Insert: {
-          created_at?: string;
-          id?: string;
-          name: string;
-        };
+          created_at?: string
+          id?: string
+          name: string
+        }
         Update: {
-          created_at?: string;
-          id?: string;
-          name?: string;
-        };
-        Relationships: [];
-      };
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       users: {
         Row: {
-          created_at: string;
-          email: string;
-          id: string;
-          name: string;
-          password: string;
-          role: string;
-        };
+          created_at: string
+          email: string
+          id: string
+          name: string
+          password: string
+          role: Database["public"]["Enums"]["appuserrole"]
+        }
         Insert: {
-          created_at?: string;
-          email: string;
-          id?: string;
-          name: string;
-          password: string;
-          role: string;
-        };
+          created_at?: string
+          email: string
+          id?: string
+          name: string
+          password: string
+          role: Database["public"]["Enums"]["appuserrole"]
+        }
         Update: {
-          created_at?: string;
-          email?: string;
-          id?: string;
-          name?: string;
-          password?: string;
-          role?: string;
-        };
-        Relationships: [];
-      };
-    };
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string
+          password?: string
+          role?: Database["public"]["Enums"]["appuserrole"]
+        }
+        Relationships: []
+      }
+    }
     Views: {
-      [_ in never]: never;
-    };
+      [_ in never]: never
+    }
     Functions: {
-      [_ in never]: never;
-    };
+      [_ in never]: never
+    }
     Enums: {
-      [_ in never]: never;
-    };
+      appreservationstatus: "approved" | "pending" | "cancelled"
+      appuserrole: "admin" | "professor" | "coordenador" | "aluno"
+    }
     CompositeTypes: {
-      [_ in never]: never;
-    };
-  };
-};
+      [_ in never]: never
+    }
+  }
+}
 
 
 const supabaseUrl = 'https://mjecveebtvtkslirjqym.supabase.co';
@@ -348,11 +350,12 @@ export async function getAllEnvironments(): Promise<Environment[]> {
     if (error) throw new Error('Falha ao buscar ambientes: ' + error.message);
     if (!data) return [];
     
+    // Com os tipos corretos, o uso de 'any' pode ser evitado.
     return data.map(env => {
         const { environment_resources, ...rest } = env;
-        const resources = environment_resources.map((er: any) => er.resources).filter(Boolean);
+        const resources = environment_resources.map((er) => er.resources).filter(Boolean) as Resource[];
         return { ...rest, resources };
-    }) as any as Environment[];
+    }) as Environment[];
 }
 
 export async function addEnvironment(
@@ -387,8 +390,8 @@ export async function addEnvironment(
     if (!newData) throw new Error('Ambiente recém-criado não encontrado.');
     
     const { environment_resources, ...rest } = newData;
-    const resources = environment_resources.map((er: any) => er.resources).filter(Boolean);
-    return { ...rest, resources } as any as Environment;
+    const resources = environment_resources.map((er) => er.resources).filter(Boolean) as Resource[];
+    return { ...rest, resources } as Environment;
 }
 
 export async function updateEnvironment(
@@ -429,8 +432,8 @@ export async function updateEnvironment(
     if (!newData) throw new Error('Ambiente atualizado não encontrado.');
 
     const { environment_resources, ...rest } = newData;
-    const resources = environment_resources.map((er: any) => er.resources).filter(Boolean);
-    return { ...rest, resources } as any as Environment;
+    const resources = environment_resources.map((er) => er.resources).filter(Boolean) as Resource[];
+    return { ...rest, resources } as Environment;
 }
 
 export async function deleteEnvironment(id: string): Promise<void> {
@@ -510,7 +513,7 @@ export async function getReservationsForEnvironment(environmentId: string): Prom
         .order('start_time');
     
     if (error) throw new Error('Falha ao buscar a agenda do ambiente: ' + error.message);
-    return (data as any as Reservation[]) || [];
+    return (data as Reservation[]) || [];
 }
 
 export async function getReservationsForMonth(year: number, month: number): Promise<Reservation[]> {
@@ -525,7 +528,7 @@ export async function getReservationsForMonth(year: number, month: number): Prom
         .order('start_time');
 
     if (error) throw new Error('Falha ao buscar reservas para o mês: ' + error.message);
-    return (data as any as Reservation[]) || [];
+    return (data as Reservation[]) || [];
 }
 
 
@@ -537,7 +540,7 @@ export async function getUserReservations(userId: string): Promise<Reservation[]
         .order('start_time');
     
     if (error) throw new Error('Falha ao buscar suas reservas: ' + error.message);
-    return (data as any as Reservation[]) || [];
+    return (data as Reservation[]) || [];
 }
 
 

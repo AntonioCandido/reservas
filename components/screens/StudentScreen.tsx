@@ -253,8 +253,31 @@ const CalendarView: React.FC<{ environments: Environment[]; resources: Resource[
             return newDate;
         });
     };
+    
+    const isPrevDisabled = useMemo(() => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const newDate = new Date(currentDate);
+
+        if (displayMode === 'day') {
+            newDate.setDate(newDate.getDate() - 1);
+            return newDate < today;
+        } else if (displayMode === 'week') {
+            const tempDate = new Date(newDate.setDate(newDate.getDate() - 7));
+            tempDate.setDate(tempDate.getDate() - tempDate.getDay() + 6);
+            return tempDate < today;
+        } else { // month
+            const lastDayOfPrevMonth = new Date(newDate.getFullYear(), newDate.getMonth(), 0);
+            return lastDayOfPrevMonth < today;
+        }
+    }, [currentDate, displayMode]);
 
     const handleTimeSlotClick = (date: Date, hour: number) => {
+        const now = new Date();
+        const slotDateTime = new Date(date);
+        slotDateTime.setHours(hour, 59, 59, 999);
+        if (slotDateTime < now) return;
+
         setNewReservationData({ date, hour });
         setCreateModalOpen(true);
     };
@@ -285,7 +308,7 @@ const CalendarView: React.FC<{ environments: Environment[]; resources: Resource[
         <div className="bg-white rounded-xl shadow-xl p-4 sm:p-6">
             <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
                 <div className="flex items-center gap-2">
-                    <button onClick={() => handleDateChange(-1)} className="p-2 rounded-full hover:bg-gray-200 transition-colors" aria-label="Período anterior"><i className="bi bi-chevron-left"></i></button>
+                    <button onClick={() => handleDateChange(-1)} disabled={isPrevDisabled} className="p-2 rounded-full hover:bg-gray-200 transition-colors disabled:text-gray-300 disabled:cursor-not-allowed" aria-label="Período anterior"><i className="bi bi-chevron-left"></i></button>
                     <button onClick={() => setCurrentDate(new Date())} className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg transition-colors text-sm">Hoje</button>
                     <button onClick={() => handleDateChange(1)} className="p-2 rounded-full hover:bg-gray-200 transition-colors" aria-label="Próximo período"><i className="bi bi-chevron-right"></i></button>
                 </div>
@@ -312,7 +335,7 @@ const CalendarView: React.FC<{ environments: Environment[]; resources: Resource[
                 <div className="min-h-96">
                     {displayMode === 'day' && <DayView date={currentDate} reservations={reservations} onTimeSlotClick={handleTimeSlotClick} />}
                     {displayMode === 'week' && <WeekView date={currentDate} reservations={reservations} />}
-                    {displayMode === 'month' && <MonthView date={currentDate} reservations={reservations} onDateClick={setCurrentDate} onModeChange={setDisplayMode} />}
+                    {displayMode === 'month' && <MonthView date={currentDate} reservations={reservations} onDateClick={(d) => { setDisplayMode('day'); setCurrentDate(d); }} />}
                     {displayMode === 'list' && <ListView reservations={reservations} />}
                     {displayMode === 'resource' && <WeekView date={currentDate} reservations={filteredReservations} />}
                 </div>
@@ -339,6 +362,7 @@ const CalendarView: React.FC<{ environments: Environment[]; resources: Resource[
 const DayView: React.FC<{ date: Date; reservations: Reservation[]; onTimeSlotClick: (date: Date, hour: number) => void; }> = ({ date, reservations, onTimeSlotClick }) => {
     const dayReservations = reservations.filter(r => areDatesSameDay(new Date(r.start_time), date)).sort((a,b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
     const hours = Array.from({ length: 16 }, (_, i) => i + 7); // 7 AM to 10 PM
+    const now = new Date();
 
     const reservationsByHour = dayReservations.reduce((acc, res) => {
         const startHour = new Date(res.start_time).getHours();
@@ -353,16 +377,21 @@ const DayView: React.FC<{ date: Date; reservations: Reservation[]; onTimeSlotCli
         <div className="border rounded-lg p-2 max-h-[60vh] overflow-y-auto">
             {hours.map(hour => {
                 const hourReservations = reservationsByHour[hour] || [];
+                const slotEndDateTime = new Date(date);
+                slotEndDateTime.setHours(hour, 59, 59, 999);
+                const isPast = slotEndDateTime < now;
+
                 return (
                     <div 
                         key={hour} 
-                        className="flex border-b last:border-b-0 min-h-[4rem] group"
-                        onClick={() => onTimeSlotClick(date, hour)}
+                        className={`flex border-b last:border-b-0 min-h-[4rem] group ${isPast ? 'bg-gray-100' : ''}`}
+                        onClick={() => !isPast && onTimeSlotClick(date, hour)}
                         role="button"
-                        aria-label={`Agendar para ${hour}:00`}
+                        aria-disabled={isPast}
+                        aria-label={isPast ? `Horário passado: ${hour}:00` : `Agendar para ${hour}:00`}
                     >
-                        <div className="w-20 text-right pr-4 py-2 text-sm text-gray-500 border-r flex-shrink-0">{hour}:00</div>
-                        <div className="flex-1 pl-4 py-2 space-y-2 cursor-pointer hover:bg-blue-50 transition-colors w-full">
+                        <div className={`w-20 text-right pr-4 py-2 text-sm border-r flex-shrink-0 ${isPast ? 'text-gray-400' : 'text-gray-500'}`}>{hour}:00</div>
+                        <div className={`flex-1 pl-4 py-2 space-y-2 w-full ${isPast ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-blue-50 transition-colors'}`}>
                             {hourReservations.length > 0 ? (
                                 hourReservations.map(res => (
                                     <div key={res.id} className="bg-blue-100 text-blue-900 p-2 rounded-md text-xs shadow-sm">
@@ -372,8 +401,12 @@ const DayView: React.FC<{ date: Date; reservations: Reservation[]; onTimeSlotCli
                                     </div>
                                 ))
                             ) : (
-                                <div className="h-full flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <p className="text-sm text-estacio-blue font-semibold"><i className="bi bi-plus-circle-fill mr-2"></i>Agendar neste horário</p>
+                                <div className={`h-full flex items-center ${isPast ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 transition-opacity'}`}>
+                                    {isPast ? (
+                                        <p className="text-sm text-gray-400">Horário indisponível</p>
+                                    ) : (
+                                        <p className="text-sm text-estacio-blue font-semibold"><i className="bi bi-plus-circle-fill mr-2"></i>Agendar neste horário</p>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -422,12 +455,13 @@ const WeekView: React.FC<{ date: Date; reservations: Reservation[] }> = ({ date,
     );
 };
 
-const MonthView: React.FC<{ date: Date; reservations: Reservation[]; onDateClick: (date: Date) => void; onModeChange: (mode: CalendarDisplayMode) => void; }> = ({ date, reservations, onDateClick, onModeChange }) => {
+const MonthView: React.FC<{ date: Date; reservations: Reservation[]; onDateClick: (date: Date) => void; }> = ({ date, reservations, onDateClick }) => {
     const year = date.getFullYear();
     const month = date.getMonth();
     const firstDayOfMonth = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    
     const reservationsByDay = reservations.reduce((acc, res) => {
         const day = new Date(res.start_time).getDate();
         if (!acc[day]) acc[day] = 0;
@@ -435,6 +469,9 @@ const MonthView: React.FC<{ date: Date; reservations: Reservation[]; onDateClick
         return acc;
     }, {} as { [day: number]: number });
     
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     return (
         <>
             <div className="grid grid-cols-7 gap-1 text-center font-semibold text-gray-600 mb-2">
@@ -445,17 +482,29 @@ const MonthView: React.FC<{ date: Date; reservations: Reservation[]; onDateClick
                 {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
                     const dayDate = new Date(year, month, day);
                     const isToday = areDatesSameDay(new Date(), dayDate);
+                    
+                    const dayDateStartOfDay = new Date(year, month, day);
+                    dayDateStartOfDay.setHours(0, 0, 0, 0);
+                    const isPast = dayDateStartOfDay < today;
+                    
                     const hasReservations = !!reservationsByDay[day];
 
                     return (
                         <button
                             key={day}
-                            onClick={() => { onDateClick(dayDate); onModeChange('day'); }}
-                            className={`relative h-16 w-full flex items-center justify-center rounded-lg transition-colors hover:bg-gray-100 ${!hasReservations && isToday ? 'bg-red-50' : 'bg-white'}`}
+                            onClick={() => onDateClick(dayDate)}
+                            disabled={isPast}
+                            className={`relative h-16 w-full flex items-center justify-center rounded-lg transition-colors ${
+                                isPast
+                                ? 'bg-gray-100 cursor-not-allowed'
+                                : 'hover:bg-gray-100'
+                            } ${!hasReservations && isToday ? 'bg-red-50' : 'bg-white'}`}
                         >
                             <span
                                 className={`h-8 w-8 flex items-center justify-center rounded-full font-semibold transition-colors ${
-                                    hasReservations
+                                    isPast
+                                    ? 'text-gray-400'
+                                    : hasReservations
                                         ? 'bg-highlight-blue text-white'
                                         : isToday
                                         ? 'text-estacio-red'
@@ -535,6 +584,11 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, en
             return;
         }
 
+        if (start_time < new Date()) {
+            setError("Não é possível criar uma reserva em uma data ou horário passados.");
+            return;
+        }
+
         setIsBooking(true);
         try {
             await createReservation({
@@ -561,7 +615,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, en
                         <h3 className="text-lg font-semibold text-gray-700">Nova Reserva</h3>
                         {error && <p className="text-red-500 text-sm text-center font-semibold bg-red-100 p-2 rounded-md">{error}</p>}
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            <input type="date" value={formState.date} onChange={e => setFormState(s => ({...s, date: e.target.value}))} required className="input-field"/>
+                            <input type="date" value={formState.date} onChange={e => setFormState(s => ({...s, date: e.target.value}))} required className="input-field" min={new Date().toISOString().split('T')[0]}/>
                             <input type="time" value={formState.startTime} onChange={e => setFormState(s => ({...s, startTime: e.target.value}))} required className="input-field"/>
                             <input type="time" value={formState.endTime} onChange={e => setFormState(s => ({...s, endTime: e.target.value}))} required className="input-field"/>
                         </div>
@@ -705,6 +759,11 @@ const CreateReservationModal: React.FC<CreateReservationModalProps> = ({
     if (startDateTime >= endDateTime) {
       setError('O horário de término deve ser após o horário de início.');
       return;
+    }
+
+    if (startDateTime < new Date()) {
+        setError('Não é possível criar uma reserva em uma data ou horário passados.');
+        return;
     }
 
     setIsSaving(true);
