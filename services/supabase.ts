@@ -1,5 +1,7 @@
 
 
+
+
 import { createClient } from '@supabase/supabase-js';
 import type { User, Environment, Reservation, EnvironmentType, Resource } from '../types';
 import { UserRole } from '../constants';
@@ -29,15 +31,7 @@ export type Database = {
           name?: string
           type_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "environments_type_id_fkey"
-            columns: ["type_id"]
-            isOneToOne: false
-            referencedRelation: "environment_types"
-            referencedColumns: ["id"]
-          }
-        ]
+        Relationships: []
       }
       environment_resources: {
         Row: {
@@ -52,22 +46,7 @@ export type Database = {
           environment_id?: string
           resource_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "environment_resources_environment_id_fkey"
-            columns: ["environment_id"]
-            isOneToOne: false
-            referencedRelation: "environments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "environment_resources_resource_id_fkey"
-            columns: ["resource_id"]
-            isOneToOne: false
-            referencedRelation: "resources"
-            referencedColumns: ["id"]
-          }
-        ]
+        Relationships: []
       }
       environment_types: {
         Row: {
@@ -115,22 +94,7 @@ export type Database = {
           status?: "approved" | "pending" | "cancelled"
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "reservations_environment_id_fkey"
-            columns: ["environment_id"]
-            isOneToOne: false
-            referencedRelation: "environments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reservations_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          }
-        ]
+        Relationships: []
       }
       resources: {
         Row: {
@@ -205,7 +169,10 @@ export async function testDatabaseConnection(): Promise<boolean> {
         const { error: usersError } = await supabase.from('users').select('id').limit(1);
         if (usersError) throw usersError;
 
-        const { error: environmentsError } = await supabase.from('environments').select('id').limit(1);
+        // Verifica a estrutura da tabela environments.
+        // Procura pela coluna 'type_id' que é parte do esquema atual.
+        // Se esta consulta falhar, o banco de dados provavelmente está desatualizado.
+        const { error: environmentsError } = await supabase.from('environments').select('id, type_id').limit(1);
         if (environmentsError) throw environmentsError;
         
         const { error: typesError } = await supabase.from('environment_types').select('id').limit(1);
@@ -244,8 +211,8 @@ export async function loginUser(email: string, password_plaintext: string): Prom
     }
 
     // Se o usuário existir, verifique a senha
-    if (data.password === password_plaintext) {
-        const { password, ...userWithoutPassword } = data;
+    if ((data as any).password === password_plaintext) {
+        const { password, ...userWithoutPassword } = data as any;
         return userWithoutPassword as User;
     }
 
@@ -256,7 +223,7 @@ export async function loginUser(email: string, password_plaintext: string): Prom
 export async function getAllUsers(): Promise<User[]> {
     const { data, error } = await supabase.from('users').select('id, name, email, role, created_at').order('name');
     if (error) throw new Error('Falha ao buscar usuários: ' + error.message);
-    return (data as User[]) || [];
+    return (data as unknown as User[]) || [];
 }
 
 export async function updateUser(
@@ -274,7 +241,7 @@ export async function updateUser(
         throw new Error('Usuário não encontrado.');
     }
 
-    if (currentUser.password !== currentPasswordForVerification) {
+    if ((currentUser as any).password !== currentPasswordForVerification) {
         throw new Error('A senha atual está incorreta.');
     }
     
@@ -295,7 +262,7 @@ export async function updateUser(
     if (!data) {
         throw new Error('Usuário não encontrado após a atualização.');
     }
-    return data as User;
+    return data as unknown as User;
 }
 
 export async function updateUserByAdmin(
@@ -323,7 +290,7 @@ export async function updateUserByAdmin(
   if (!data) {
       throw new Error('Usuário não encontrado após a atualização.');
   }
-  return data as User;
+  return data as unknown as User;
 }
 
 export async function createUserByAdmin(
@@ -344,7 +311,7 @@ export async function createUserByAdmin(
   if (!data) {
       throw new Error('Usuário não pôde ser criado.');
   }
-  return data as User;
+  return data as unknown as User;
 }
 
 export async function deleteUserByAdmin(userId: string): Promise<void> {
@@ -377,7 +344,7 @@ export async function getAllEnvironments(): Promise<Environment[]> {
 }
 
 export async function addEnvironment(
-  envData: Database['public']['Tables']['environments']['Insert'],
+  envData: { name: string; location?: string | null; type_id: string },
   resourceIds: string[]
 ): Promise<Environment> {
     const { data, error } = await supabase.from('environments').insert(envData).select().single();
@@ -391,19 +358,19 @@ export async function addEnvironment(
 
     if (resourceIds.length > 0) {
         const environmentResources = resourceIds.map(resource_id => ({
-            environment_id: data.id,
+            environment_id: (data as any).id,
             resource_id: resource_id
         }));
         const { error: resourcesError } = await supabase.from('environment_resources').insert(environmentResources);
         if (resourcesError) {
             // Tenta limpar o ambiente criado em caso de erro nos recursos
-            await supabase.from('environments').delete().eq('id', data.id);
+            await supabase.from('environments').delete().eq('id', (data as any).id);
             throw new Error('Falha ao associar recursos ao ambiente: ' + resourcesError.message);
         }
     }
     
     // Busca novamente para retornar com os dados completos
-    const { data: newData, error: newError } = await supabase.from('environments').select('*, environment_types(name), environment_resources(resources!inner(*))').eq('id', data.id).single();
+    const { data: newData, error: newError } = await supabase.from('environments').select('*, environment_types(name), environment_resources(resources!inner(*))').eq('id', (data as any).id).single();
     if (newError) throw new Error('Falha ao buscar o ambiente recém-criado: ' + newError.message);
     if (!newData) throw new Error('Ambiente recém-criado não encontrado.');
     
@@ -414,7 +381,7 @@ export async function addEnvironment(
 
 export async function updateEnvironment(
   id: string, 
-  envData: Database['public']['Tables']['environments']['Update'],
+  envData: { name?: string; location?: string | null; type_id?: string },
   resourceIds: string[]
 ): Promise<Environment> {
     const { data, error } = await supabase
@@ -445,7 +412,7 @@ export async function updateEnvironment(
     }
     
     // Busca novamente para retornar com os dados completos
-    const { data: newData, error: newError } = await supabase.from('environments').select('*, environment_types(name), environment_resources(resources!inner(*))').eq('id', data.id).single();
+    const { data: newData, error: newError } = await supabase.from('environments').select('*, environment_types(name), environment_resources(resources!inner(*))').eq('id', (data as any).id).single();
     if (newError) throw new Error('Falha ao buscar o ambiente atualizado: ' + newError.message);
     if (!newData) throw new Error('Ambiente atualizado não encontrado.');
 
@@ -469,19 +436,19 @@ export async function deleteEnvironment(id: string): Promise<void> {
 export async function getAllEnvironmentTypes(): Promise<EnvironmentType[]> {
     const { data, error } = await supabase.from('environment_types').select('*').order('name');
     if (error) throw new Error('Falha ao buscar tipos de ambiente: ' + error.message);
-    return data || [];
+    return (data as unknown as EnvironmentType[]) || [];
 }
 export async function addEnvironmentType(name: string): Promise<EnvironmentType> {
     const { data, error } = await supabase.from('environment_types').insert({ name }).select().single();
     if (error) throw new Error('Falha ao adicionar tipo: ' + error.message);
     if (!data) throw new Error('Não foi possível criar o tipo.');
-    return data;
+    return data as unknown as EnvironmentType;
 }
 export async function updateEnvironmentType(id: string, name: string): Promise<EnvironmentType> {
     const { data, error } = await supabase.from('environment_types').update({ name }).eq('id', id).select().single();
     if (error) throw new Error('Falha ao atualizar tipo: ' + error.message);
     if (!data) throw new Error('Tipo não encontrado para atualizar.');
-    return data;
+    return data as unknown as EnvironmentType;
 }
 export async function deleteEnvironmentType(id: string): Promise<void> {
     const { error } = await supabase.from('environment_types').delete().eq('id', id);
@@ -497,19 +464,19 @@ export async function deleteEnvironmentType(id: string): Promise<void> {
 export async function getAllResources(): Promise<Resource[]> {
     const { data, error } = await supabase.from('resources').select('*').order('name');
     if (error) throw new Error('Falha ao buscar recursos: ' + error.message);
-    return data || [];
+    return (data as unknown as Resource[]) || [];
 }
 export async function addResource(name: string): Promise<Resource> {
     const { data, error } = await supabase.from('resources').insert({ name }).select().single();
     if (error) throw new Error('Falha ao adicionar recurso: ' + error.message);
     if (!data) throw new Error('Não foi possível criar o recurso.');
-    return data;
+    return data as unknown as Resource;
 }
 export async function updateResource(id: string, name: string): Promise<Resource> {
     const { data, error } = await supabase.from('resources').update({ name }).eq('id', id).select().single();
     if (error) throw new Error('Falha ao atualizar recurso: ' + error.message);
     if (!data) throw new Error('Recurso não encontrado para atualizar.');
-    return data;
+    return data as unknown as Resource;
 }
 export async function deleteResource(id: string): Promise<void> {
     const { error } = await supabase.from('resources').delete().eq('id', id);
@@ -531,7 +498,7 @@ export async function getReservationsForEnvironment(environmentId: string): Prom
         .order('start_time');
     
     if (error) throw new Error('Falha ao buscar a agenda do ambiente: ' + error.message);
-    return (data as Reservation[]) || [];
+    return (data as unknown as Reservation[]) || [];
 }
 
 export async function getReservationsForMonth(year: number, month: number): Promise<Reservation[]> {
@@ -546,7 +513,7 @@ export async function getReservationsForMonth(year: number, month: number): Prom
         .order('start_time');
 
     if (error) throw new Error('Falha ao buscar reservas para o mês: ' + error.message);
-    return (data as Reservation[]) || [];
+    return (data as unknown as Reservation[]) || [];
 }
 
 
@@ -558,11 +525,11 @@ export async function getUserReservations(userId: string): Promise<Reservation[]
         .order('start_time');
     
     if (error) throw new Error('Falha ao buscar suas reservas: ' + error.message);
-    return (data as Reservation[]) || [];
+    return (data as unknown as Reservation[]) || [];
 }
 
 
-export async function createReservation(resData: Omit<Reservation, 'id' | 'created_at' | 'status' | 'users' | 'environments'>): Promise<any> {
+export async function createReservation(resData: { environment_id: string; user_id: string; start_time: string; end_time: string; }): Promise<any> {
     const { data, error } = await supabase
         .from('reservations')
         .insert({ ...resData, status: 'approved' })
