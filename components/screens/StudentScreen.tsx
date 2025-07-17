@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getAllEnvironments, createReservation, getReservationsForEnvironment, getUserReservations, cancelReservation, getReservationsForMonth, getAllResources } from '../../services/supabase.ts';
 import type { AppContextType, Environment, Reservation, User, Resource } from '../../types';
@@ -7,6 +6,7 @@ import Spinner from '../common/Spinner';
 import Modal from '../common/Modal';
 import ConfirmationModal from '../common/ConfirmationModal';
 import ProfileModal from '../common/ProfileModal';
+import AIAssistantModal from '../common/AIAssistantModal.tsx';
 
 type MainView = 'all' | 'my' | 'calendar';
 
@@ -24,6 +24,7 @@ const MainScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, set
   const [reservationToDelete, setReservationToDelete] = useState<Reservation | null>(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isContentOpen, setIsContentOpen] = useState(true);
+  const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false);
 
 
   const fetchData = useCallback(async () => {
@@ -69,6 +70,11 @@ const MainScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, set
     return null;
   }
   
+  const handleSuggestion = (environment: Environment) => {
+    setIsAIAssistantOpen(false);
+    setSelectedEnvironment(environment);
+  };
+  
   const renderContent = () => {
     switch(view) {
         case 'all':
@@ -84,7 +90,7 @@ const MainScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, set
   }
 
   return (
-    <div className="container mx-auto p-4 md:p-8">
+    <div className="container mx-auto p-4 md:p-8 pb-24">
       <header className="flex flex-col sm:flex-row justify-between sm:items-center mb-8 gap-4">
         <div>
             <h1 className="text-4xl font-bold text-gray-800">Olá, {user.name.split(' ')[0]}</h1>
@@ -148,6 +154,27 @@ const MainScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, set
             user={user}
             onUserUpdate={setUser}
         />
+      )}
+
+       {user && (
+        <AIAssistantModal
+          isOpen={isAIAssistantOpen}
+          onClose={() => setIsAIAssistantOpen(false)}
+          environments={environments}
+          user={user}
+          onSuggestion={handleSuggestion}
+        />
+      )}
+
+      {user && view !== 'calendar' && (
+        <button
+            onClick={() => setIsAIAssistantOpen(true)}
+            className="fixed bottom-8 right-8 bg-estacio-blue text-white w-16 h-16 rounded-full shadow-lg flex items-center justify-center hover:bg-opacity-90 transition-all duration-300 transform hover:scale-110 z-40"
+            title="Assistente de Reserva IA"
+            aria-label="Abrir assistente de reserva com Inteligência Artificial"
+        >
+            <i className="bi bi-magic text-2xl"></i>
+        </button>
       )}
     </div>
   );

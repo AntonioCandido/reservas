@@ -46,7 +46,7 @@ const LoginScreen: React.FC<Omit<AppContextType, 'page' | 'user'>> = ({ setPage,
             alt="Logo Estácio" 
             className="w-40 mx-auto mb-4"
           />
-          <h2 className="text-2xl font-bold text-gray-800">Reserva de Ambientes 1.0</h2>
+          <h2 className="text-2xl font-bold text-gray-800">Reserva de Ambientes 1.2</h2>
         </div>
         {error && <p className="bg-red-100 text-red-700 p-3 rounded-md text-center text-sm font-semibold">{error}</p>}
         <form onSubmit={handleLogin} className="space-y-6">

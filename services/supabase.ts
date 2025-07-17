@@ -1,4 +1,5 @@
 
+
 import { createClient } from '@supabase/supabase-js';
 import type { User, Environment, Reservation, EnvironmentType, Resource } from '../types';
 import { UserRole } from '../constants';
@@ -35,7 +36,7 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "environment_types"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
       environment_resources: {
@@ -65,7 +66,7 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "resources"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
       environment_types: {
@@ -93,7 +94,7 @@ export type Database = {
           environment_id: string
           id: string
           start_time: string
-          status: Database["public"]["Enums"]["appreservationstatus"]
+          status: "approved" | "pending" | "cancelled"
           user_id: string
         }
         Insert: {
@@ -102,7 +103,7 @@ export type Database = {
           environment_id: string
           id?: string
           start_time: string
-          status?: Database["public"]["Enums"]["appreservationstatus"]
+          status?: "approved" | "pending" | "cancelled"
           user_id: string
         }
         Update: {
@@ -111,7 +112,7 @@ export type Database = {
           environment_id?: string
           id?: string
           start_time?: string
-          status?: Database["public"]["Enums"]["appreservationstatus"]
+          status?: "approved" | "pending" | "cancelled"
           user_id?: string
         }
         Relationships: [
@@ -128,7 +129,7 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
       resources: {
@@ -156,7 +157,7 @@ export type Database = {
           id: string
           name: string
           password: string
-          role: Database["public"]["Enums"]["appuserrole"]
+          role: "admin" | "professor" | "coordenador" | "aluno"
         }
         Insert: {
           created_at?: string
@@ -164,7 +165,7 @@ export type Database = {
           id?: string
           name: string
           password: string
-          role: Database["public"]["Enums"]["appuserrole"]
+          role: "admin" | "professor" | "coordenador" | "aluno"
         }
         Update: {
           created_at?: string
@@ -172,7 +173,7 @@ export type Database = {
           id?: string
           name?: string
           password?: string
-          role?: Database["public"]["Enums"]["appuserrole"]
+          role?: "admin" | "professor" | "coordenador" | "aluno"
         }
         Relationships: []
       }
@@ -184,8 +185,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      appreservationstatus: "approved" | "pending" | "cancelled"
-      appuserrole: "admin" | "professor" | "coordenador" | "aluno"
+      [_ in never]: never
     }
     CompositeTypes: {
       [_ in never]: never
@@ -230,18 +230,26 @@ export async function loginUser(email: string, password_plaintext: string): Prom
         .from('users')
         .select('*')
         .eq('email', email)
-        .single();
+        .maybeSingle(); // Usar maybeSingle() evita erro quando nenhum usuário é encontrado
     
-    if (error || !data) {
-        console.error('Erro de login (usuário não encontrado):', error?.message);
+    // Se houver um erro real na consulta (ex: problema de rede), lance uma exceção
+    if (error) {
+        console.error('Erro de login (falha na consulta):', error?.message);
+        throw new Error('Ocorreu uma falha ao tentar fazer login. Tente novamente.');
+    }
+
+    // Se data for nulo, o usuário não existe; retorne nulo sem erro no console
+    if (!data) {
         return null;
     }
 
+    // Se o usuário existir, verifique a senha
     if (data.password === password_plaintext) {
         const { password, ...userWithoutPassword } = data;
         return userWithoutPassword as User;
     }
 
+    // Senha incorreta
     return null;
 }
 
@@ -339,6 +347,16 @@ export async function createUserByAdmin(
   return data as User;
 }
 
+export async function deleteUserByAdmin(userId: string): Promise<void> {
+  const { error } = await supabase.from('users').delete().eq('id', userId);
+  if (error) {
+    if (error.code === '23503') { // Foreign key violation
+      throw new Error('Não é possível excluir este usuário, pois ele possui reservas associadas.');
+    }
+    throw new Error('Falha ao excluir o usuário: ' + error.message);
+  }
+}
+
 
 // --- Serviços de Ambientes ---
 export async function getAllEnvironments(): Promise<Environment[]> {
@@ -351,9 +369,9 @@ export async function getAllEnvironments(): Promise<Environment[]> {
     if (!data) return [];
     
     // Com os tipos corretos, o uso de 'any' pode ser evitado.
-    return data.map(env => {
+    return data.map((env: any) => {
         const { environment_resources, ...rest } = env;
-        const resources = environment_resources.map((er) => er.resources).filter(Boolean) as Resource[];
+        const resources = environment_resources.map((er: any) => er.resources).filter(Boolean) as Resource[];
         return { ...rest, resources };
     }) as Environment[];
 }
@@ -389,8 +407,8 @@ export async function addEnvironment(
     if (newError) throw new Error('Falha ao buscar o ambiente recém-criado: ' + newError.message);
     if (!newData) throw new Error('Ambiente recém-criado não encontrado.');
     
-    const { environment_resources, ...rest } = newData;
-    const resources = environment_resources.map((er) => er.resources).filter(Boolean) as Resource[];
+    const { environment_resources, ...rest } = newData as any;
+    const resources = environment_resources.map((er: any) => er.resources).filter(Boolean) as Resource[];
     return { ...rest, resources } as Environment;
 }
 
@@ -431,8 +449,8 @@ export async function updateEnvironment(
     if (newError) throw new Error('Falha ao buscar o ambiente atualizado: ' + newError.message);
     if (!newData) throw new Error('Ambiente atualizado não encontrado.');
 
-    const { environment_resources, ...rest } = newData;
-    const resources = environment_resources.map((er) => er.resources).filter(Boolean) as Resource[];
+    const { environment_resources, ...rest } = newData as any;
+    const resources = environment_resources.map((er: any) => er.resources).filter(Boolean) as Resource[];
     return { ...rest, resources } as Environment;
 }
 
