@@ -7,8 +7,9 @@ const DbErrorScreen: React.FC<Pick<AppContextType, 'setPage'>> = ({ setPage }) =
   const sqlScript = `-- Este script é idempotente. Pode ser executado com segurança em um banco de dados novo ou existente.
 -- Ele criará as tabelas que faltam, migrará as estruturas antigas e inserirá os dados de exemplo.
 
--- Habilita a extensão para gerar UUIDs.
+-- Habilita as extensões para gerar UUIDs e para o GIST, necessário para a restrição de sobreposição.
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS btree_gist;
 
 -- Criação de tabelas com IF NOT EXISTS para ser seguro
 CREATE TABLE IF NOT EXISTS public.users (
@@ -112,8 +113,18 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'reservations_user_id_fkey') THEN
         ALTER TABLE public.reservations ADD CONSTRAINT reservations_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
     END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'reservations_environment_id_start_time_end_time_key') THEN
-        ALTER TABLE public.reservations ADD CONSTRAINT reservations_environment_id_start_time_end_time_key UNIQUE(environment_id, start_time, end_time);
+    
+    -- Remove a antiga chave de unicidade se ela existir, para substituí-la
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'reservations_environment_id_start_time_end_time_key') THEN
+        ALTER TABLE public.reservations DROP CONSTRAINT reservations_environment_id_start_time_end_time_key;
+    END IF;
+    
+    -- Adiciona a nova restrição de exclusão para evitar sobreposição de horários.
+    -- Isso garante no nível do banco de dados que não haja duas reservas para o mesmo ambiente no mesmo intervalo de tempo.
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'reservations_no_overlap') THEN
+        ALTER TABLE public.reservations 
+        ADD CONSTRAINT reservations_no_overlap 
+        EXCLUDE USING gist (environment_id WITH =, tstzrange(start_time, end_time) WITH &&);
     END IF;
 END $$;
 

@@ -70,29 +70,29 @@ export type Database = {
         Row: {
           created_at: string
           end_time: string
-          environment_id: string
+          environment_id: string | null
           id: string
           start_time: string
           status: "approved" | "pending" | "cancelled"
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
           end_time: string
-          environment_id: string
+          environment_id: string | null
           id?: string
           start_time: string
           status?: "approved" | "pending" | "cancelled"
-          user_id: string
+          user_id: string | null
         }
         Update: {
           created_at?: string
           end_time?: string
-          environment_id?: string
+          environment_id?: string | null
           id?: string
           start_time?: string
           status?: "approved" | "pending" | "cancelled"
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -142,18 +142,10 @@ export type Database = {
         Relationships: []
       }
     }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      [_ in never]: never
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
+    Views: {}
+    Functions: {}
+    Enums: {}
+    CompositeTypes: {}
   }
 }
 
@@ -528,27 +520,142 @@ export async function getUserReservations(userId: string): Promise<Reservation[]
     return (data as unknown as Reservation[]) || [];
 }
 
+export async function createReservations(reservationsData: { environment_id: string; user_id: string; start_time: string; end_time: string; }[]): Promise<any[]> {
+    if (!reservationsData || reservationsData.length === 0) {
+        return [];
+    }
 
-export async function createReservation(resData: { environment_id: string; user_id: string; start_time: string; end_time: string; }): Promise<any> {
+    // Etapa 1: Verificar conflitos antes da inserção.
+    // A lógica foi reescrita para usar a sintaxe de filtro correta do Supabase (`and(column.op.value, ...)`),
+    // resolvendo um erro que ocorria com a sintaxe SQL bruto anterior.
+    const orFilters = reservationsData.map(res => 
+        // Para cada nova reserva, cria um filtro que busca por reservas existentes
+        // que se sobrepõem no tempo para o mesmo ambiente.
+        `and(environment_id.eq.${res.environment_id},start_time.lt.${res.end_time},end_time.gt.${res.start_time})`
+    ).join(',');
+
+    const { data: conflictingReservations, error: conflictError } = await supabase
+        .from('reservations')
+        .select(`*, users (name), environments (name)`)
+        .or(orFilters);
+
+    if (conflictError) {
+        console.error('Erro ao verificar conflitos:', conflictError.message);
+        throw new Error('Falha ao verificar a disponibilidade do horário. Detalhe: ' + conflictError.message);
+    }
+    
+    // Etapa 2: Lidar com conflitos encontrados e fornecer uma mensagem clara
+    if (conflictingReservations && conflictingReservations.length > 0) {
+        const firstConflict: any = conflictingReservations[0];
+        const conflictDetails = `Conflito de horário! O ambiente "${firstConflict.environments?.name || 'desconhecido'}" já está reservado por "${firstConflict.users?.name || 'desconhecido'}" de ${new Date(firstConflict.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} às ${new Date(firstConflict.end_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} no mesmo dia.`;
+        throw new Error(conflictDetails);
+    }
+
+    // Etapa 3: Inserir as novas reservas se não houver conflitos
+    const dataToInsert = reservationsData.map(res => ({ ...res, status: 'approved' as const }));
+    
     const { data, error } = await supabase
         .from('reservations')
-        .insert({ ...resData, status: 'approved' })
-        .select()
-        .single();
+        .insert(dataToInsert)
+        .select();
     
     if (error) {
-        if (error.code === '23505') {
-            throw new Error('Este horário já está reservado. Por favor, escolha outro.');
+        if (error.message.includes('reservations_no_overlap')) {
+             throw new Error('Este horário entra em conflito com uma reserva existente. Por favor, atualize e tente novamente.');
         }
         if (error.message.includes('check_end_time_after_start_time')) {
             throw new Error('O horário de término deve ser após o horário de início.');
         }
         throw new Error('Falha ao criar a reserva: ' + error.message);
     }
+    
     return data;
 }
 
 export async function cancelReservation(id: string): Promise<void> {
     const { error } = await supabase.from('reservations').delete().eq('id', id);
     if (error) throw new Error('Falha ao cancelar a reserva: ' + error.message);
+}
+
+// --- Backup & Restore Services ---
+export async function getBackupData(): Promise<object> {
+    const [
+        users,
+        environment_types,
+        resources,
+        environments,
+        environment_resources,
+        reservations
+    ] = await Promise.all([
+        supabase.from('users').select('*'),
+        supabase.from('environment_types').select('*'),
+        supabase.from('resources').select('*'),
+        supabase.from('environments').select('*'),
+        supabase.from('environment_resources').select('*'),
+        supabase.from('reservations').select('*')
+    ]);
+
+    if (users.error) throw new Error('Falha ao buscar usuários: ' + users.error.message);
+    if (environment_types.error) throw new Error('Falha ao buscar tipos de ambiente: ' + environment_types.error.message);
+    if (resources.error) throw new Error('Falha ao buscar recursos: ' + resources.error.message);
+    if (environments.error) throw new Error('Falha ao buscar ambientes: ' + environments.error.message);
+    if (environment_resources.error) throw new Error('Falha ao buscar relações de recursos: ' + environment_resources.error.message);
+    if (reservations.error) throw new Error('Falha ao buscar reservas: ' + reservations.error.message);
+    
+    return {
+        users: users.data,
+        environment_types: environment_types.data,
+        resources: resources.data,
+        environments: environments.data,
+        environment_resources: environment_resources.data,
+        reservations: reservations.data,
+    };
+}
+
+export async function restoreBackupData(backupData: any): Promise<void> {
+    const requiredKeys = ['users', 'environment_types', 'resources', 'environments', 'environment_resources', 'reservations'];
+    for (const key of requiredKeys) {
+        if (!backupData.hasOwnProperty(key) || !Array.isArray(backupData[key])) {
+            throw new Error(`Arquivo de backup inválido. A chave "${key}" está faltando ou não é um array.`);
+        }
+    }
+
+    // Deletion in reverse order of dependencies
+    let { error } = await supabase.from('reservations').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    if (error) throw new Error(`Falha ao limpar reservas: ${error.message}`);
+    
+    ({ error } = await supabase.from('environment_resources').delete().neq('environment_id', '00000000-0000-0000-0000-000000000000'));
+    if (error) throw new Error(`Falha ao limpar recursos de ambientes: ${error.message}`);
+    
+    ({ error } = await supabase.from('environments').delete().neq('id', '00000000-0000-0000-0000-000000000000'));
+    if (error) throw new Error(`Falha ao limpar ambientes: ${error.message}`);
+    
+    ({ error } = await supabase.from('users').delete().neq('id', '00000000-0000-0000-0000-000000000000'));
+    if (error) throw new Error(`Falha ao limpar usuários: ${error.message}`);
+    
+    ({ error } = await supabase.from('resources').delete().neq('id', '00000000-0000-0000-0000-000000000000'));
+    if (error) throw new Error(`Falha ao limpar recursos: ${error.message}`);
+    
+    ({ error } = await supabase.from('environment_types').delete().neq('id', '00000000-0000-0000-0000-000000000000'));
+    if (error) throw new Error(`Falha ao limpar tipos de ambiente: ${error.message}`);
+    
+
+    // Insertion in order of dependencies
+    ({ error } = await supabase.from('users').insert(backupData.users));
+    if (error) throw new Error(`Falha ao restaurar usuários: ${error.message}`);
+    
+    ({ error } = await supabase.from('environment_types').insert(backupData.environment_types));
+    if (error) throw new Error(`Falha ao restaurar tipos de ambiente: ${error.message}`);
+
+    ({ error } = await supabase.from('resources').insert(backupData.resources));
+    if (error) throw new Error(`Falha ao restaurar recursos: ${error.message}`);
+
+    ({ error } = await supabase.from('environments').insert(backupData.environments));
+    if (error) throw new Error(`Falha ao restaurar ambientes: ${error.message}`);
+    
+    ({ error } = await supabase.from('environment_resources').insert(backupData.environment_resources));
+    if (error) throw new Error(`Falha ao restaurar recursos de ambientes: ${error.message}`);
+
+    ({ error } = await supabase.from('reservations').insert(backupData.reservations));
+    if (error) throw new Error(`Falha ao restaurar reservas: ${error.message}`);
 }

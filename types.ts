@@ -34,8 +34,8 @@ export interface Environment {
 export interface Reservation {
   id: string;
   created_at: string;
-  environment_id: string;
-  user_id: string;
+  environment_id: string | null;
+  user_id: string | null;
   start_time: string;
   end_time: string;
   status: 'approved' | 'pending' | 'cancelled';

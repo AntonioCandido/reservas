@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { getAllEnvironments, createReservation, getReservationsForEnvironment, getUserReservations, cancelReservation, getReservationsForMonth, getAllResources } from '../../services/supabase.ts';
+import { getAllEnvironments, createReservations, getReservationsForEnvironment, getUserReservations, cancelReservation, getReservationsForMonth, getAllResources } from '../../services/supabase.ts';
 import type { AppContextType, Environment, Reservation, User, Resource } from '../../types';
 import { Page, UserRole } from '../../constants';
 import Spinner from '../common/Spinner';
@@ -25,6 +25,7 @@ const MainScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, set
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isContentOpen, setIsContentOpen] = useState(true);
   const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
 
 
   const fetchData = useCallback(async () => {
@@ -56,12 +57,15 @@ const MainScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, set
   
   const confirmCancelReservation = async () => {
     if (!reservationToDelete) return;
+    setIsCancelling(true);
     try {
         await cancelReservation(reservationToDelete.id);
         setReservationToDelete(null);
-        fetchData(); // Refresh data
+        await fetchData(); // Refresh data
     } catch (err: any) {
         setError(err.message);
+    } finally {
+        setIsCancelling(false);
     }
   };
 
@@ -83,7 +87,7 @@ const MainScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, set
             return <MyReservationsView reservations={myReservations} canManageReservations={canManageReservations} onCancelClick={setReservationToDelete} isContentOpen={isContentOpen} setIsContentOpen={setIsContentOpen} />;
         case 'calendar':
              if (!canManageReservations) return null;
-             return <CalendarView environments={environments} resources={resources} user={user} />;
+             return <CalendarView environments={environments} resources={resources} user={user} onCancelClick={setReservationToDelete} />;
         default:
             return null;
     }
@@ -145,6 +149,7 @@ const MainScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, set
         onConfirm={confirmCancelReservation}
         title="Confirmar Cancelamento"
         message="Tem certeza que deseja cancelar esta reserva?"
+        isConfirming={isCancelling}
         confirmButtonText="Sim, Cancelar"
       />
       {user && (
@@ -182,32 +187,61 @@ const MainScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, set
 
 // --- View Components ---
 const AllEnvironmentsView: React.FC<{environments: Environment[], canManageReservations: boolean, onReserveClick: (env: Environment) => void, isContentOpen: boolean, setIsContentOpen: (open: boolean) => void}> = 
-({environments, canManageReservations, onReserveClick, isContentOpen, setIsContentOpen}) => (
-    <div className="bg-white rounded-xl shadow-xl overflow-hidden">
-        <div className="flex justify-between items-center p-6 cursor-pointer group" onClick={() => setIsContentOpen(!isContentOpen)}>
-             <h2 className="text-2xl font-semibold text-gray-700">Todos os Ambientes</h2>
-             <i className={`bi bi-chevron-down text-2xl text-gray-500 transform transition-transform duration-300 group-hover:text-estacio-blue ${isContentOpen ? 'rotate-180' : ''}`}></i>
-        </div>
-        <div className={`transition-all duration-500 ease-in-out ${isContentOpen ? 'max-h-[2000px]' : 'max-h-0'}`}>
-            <div className="px-6 pb-6 border-t border-gray-200">
-                <div className="space-y-4 pt-6">
-                    {environments.map(env => (
-                        <div key={env.id} className="bg-gray-50 p-4 rounded-lg flex flex-col md:flex-row justify-between md:items-center gap-4 hover:shadow-md transition-shadow">
-                            <div>
-                                <h3 className="text-xl font-bold text-estacio-blue">{env.name} <span className="text-base font-normal text-gray-600">- {env.environment_types?.name}</span></h3>
-                                <p className="text-sm text-gray-500">{env.location}</p>
-                                <p className="text-sm text-gray-500">Recursos: {env.resources?.map(r => r.name).join(', ') || 'N/A'}</p>
-                            </div>
-                            <button onClick={() => onReserveClick(env)} className="bg-estacio-red text-white font-bold py-2 px-4 rounded-lg hover:bg-opacity-90 transition-transform transform hover:scale-105 self-end md:self-center">
-                                <i className="bi bi-calendar-plus mr-2"></i> {canManageReservations ? 'Reservar' : 'Ver Agenda'}
-                            </button>
+({environments, canManageReservations, onReserveClick, isContentOpen, setIsContentOpen}) => {
+    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
+    const sortedEnvironments = useMemo(() => {
+        return [...environments].sort((a, b) => {
+            if (sortOrder === 'asc') {
+                return a.name.localeCompare(b.name, 'pt-BR');
+            } else {
+                return b.name.localeCompare(a.name, 'pt-BR');
+            }
+        });
+    }, [environments, sortOrder]);
+
+    return (
+        <div className="bg-white rounded-xl shadow-xl overflow-hidden">
+            <div className="flex justify-between items-center p-6 cursor-pointer group" onClick={() => setIsContentOpen(!isContentOpen)}>
+                 <div className="flex items-center gap-3">
+                    <h2 className="text-2xl font-semibold text-gray-700">Todos os Ambientes</h2>
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
+                        }}
+                        className="p-1 rounded-full text-gray-500 hover:bg-gray-200 hover:text-estacio-blue transition-colors"
+                        title={sortOrder === 'asc' ? "Ordenar Z-A" : "Ordenar A-Z"}
+                        aria-label="Ordenar ambientes por nome"
+                    >
+                        <i className={`bi ${sortOrder === 'asc' ? 'bi-sort-alpha-down' : 'bi-sort-alpha-up-alt'} text-xl`}></i>
+                    </button>
+                </div>
+                 <i className={`bi bi-chevron-down text-2xl text-gray-500 transform transition-transform duration-300 group-hover:text-estacio-blue ${isContentOpen ? 'rotate-180' : ''}`}></i>
+            </div>
+            <div className={`grid transition-[grid-template-rows] duration-500 ease-in-out ${isContentOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                <div className="overflow-hidden">
+                    <div className="px-6 pb-6 border-t border-gray-200">
+                        <div className="space-y-4 pt-6">
+                            {sortedEnvironments.map(env => (
+                                <div key={env.id} className="bg-gray-50 p-4 rounded-lg flex flex-col md:flex-row justify-between md:items-center gap-4 hover:shadow-md transition-shadow">
+                                    <div>
+                                        <h3 className="text-xl font-bold text-estacio-blue">{env.name} <span className="text-base font-normal text-gray-600">- {env.environment_types?.name}</span></h3>
+                                        <p className="text-sm text-gray-500">{env.location}</p>
+                                        <p className="text-sm text-gray-500">Recursos: {env.resources?.map(r => r.name).join(', ') || 'N/A'}</p>
+                                    </div>
+                                    <button onClick={() => onReserveClick(env)} className="bg-estacio-red text-white font-bold py-2 px-4 rounded-lg hover:bg-opacity-90 transition-transform transform hover:scale-105 self-end md:self-center">
+                                        <i className="bi bi-calendar-plus mr-2"></i> {canManageReservations ? 'Reservar' : 'Ver Agenda'}
+                                    </button>
+                                </div>
+                            ))}
                         </div>
-                    ))}
-                 </div>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-);
+    );
+};
 
 const MyReservationsView: React.FC<{reservations: Reservation[], canManageReservations: boolean, onCancelClick: (res: Reservation) => void, isContentOpen: boolean, setIsContentOpen: (open: boolean) => void}> = 
 ({reservations, canManageReservations, onCancelClick, isContentOpen, setIsContentOpen}) => (
@@ -247,7 +281,7 @@ const areDatesSameDay = (d1: Date, d2: Date) =>
   d1.getMonth() === d2.getMonth() &&
   d1.getDate() === d2.getDate();
 
-const CalendarView: React.FC<{ environments: Environment[]; resources: Resource[], user: User }> = ({ environments, resources, user }) => {
+const CalendarView: React.FC<{ environments: Environment[]; resources: Resource[], user: User, onCancelClick: (res: Reservation) => void }> = ({ environments, resources, user, onCancelClick }) => {
     const [displayMode, setDisplayMode] = useState<CalendarDisplayMode>('month');
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedResourceId, setSelectedResourceId] = useState<string | null>(null);
@@ -360,7 +394,7 @@ const CalendarView: React.FC<{ environments: Environment[]; resources: Resource[
             
             {isLoading ? <div className="h-96 flex items-center justify-center"><Spinner /></div> : (
                 <div className="min-h-96">
-                    {displayMode === 'day' && <DayView date={currentDate} reservations={reservations} onTimeSlotClick={handleTimeSlotClick} />}
+                    {displayMode === 'day' && <DayView date={currentDate} reservations={reservations} onTimeSlotClick={handleTimeSlotClick} user={user} onCancelClick={onCancelClick} />}
                     {displayMode === 'week' && <WeekView date={currentDate} reservations={reservations} />}
                     {displayMode === 'month' && <MonthView date={currentDate} reservations={reservations} onDateClick={(d) => { setDisplayMode('day'); setCurrentDate(d); }} />}
                     {displayMode === 'list' && <ListView reservations={reservations} />}
@@ -386,7 +420,7 @@ const CalendarView: React.FC<{ environments: Environment[]; resources: Resource[
     );
 };
 
-const DayView: React.FC<{ date: Date; reservations: Reservation[]; onTimeSlotClick: (date: Date, hour: number) => void; }> = ({ date, reservations, onTimeSlotClick }) => {
+const DayView: React.FC<{ date: Date; reservations: Reservation[]; onTimeSlotClick: (date: Date, hour: number) => void; user: User; onCancelClick: (res: Reservation) => void; }> = ({ date, reservations, onTimeSlotClick, user, onCancelClick }) => {
     const dayReservations = reservations.filter(r => areDatesSameDay(new Date(r.start_time), date)).sort((a,b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
     const hours = Array.from({ length: 16 }, (_, i) => i + 7); // 7 AM to 10 PM
     const now = new Date();
@@ -421,10 +455,22 @@ const DayView: React.FC<{ date: Date; reservations: Reservation[]; onTimeSlotCli
                         <div className={`flex-1 pl-4 py-2 space-y-2 w-full ${isPast ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-blue-50 transition-colors'}`}>
                             {hourReservations.length > 0 ? (
                                 hourReservations.map(res => (
-                                    <div key={res.id} className="bg-blue-100 text-blue-900 p-2 rounded-md text-xs shadow-sm">
-                                        <p className="font-bold">{res.environments?.name}</p>
-                                        <p>{new Date(res.start_time).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})} - {new Date(res.end_time).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</p>
-                                        <p className="text-xs font-semibold italic">{res.users?.name}</p>
+                                    <div key={res.id} className="bg-blue-100 text-blue-900 p-2 rounded-md text-xs shadow-sm flex justify-between items-center">
+                                        <div>
+                                            <p className="font-bold">{res.environments?.name}</p>
+                                            <p>{new Date(res.start_time).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})} - {new Date(res.end_time).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</p>
+                                            <p className="text-xs font-semibold italic">{res.users?.name}</p>
+                                        </div>
+                                        {user.id === res.user_id && (
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); onCancelClick(res); }}
+                                                className="ml-2 flex-shrink-0 bg-red-100 text-red-600 hover:bg-red-200 h-8 w-8 flex items-center justify-center rounded-full transition-colors"
+                                                title="Cancelar sua reserva"
+                                                aria-label="Cancelar sua reserva"
+                                            >
+                                                <i className="bi bi-trash"></i>
+                                            </button>
+                                        )}
                                     </div>
                                 ))
                             ) : (
@@ -584,6 +630,12 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, en
     const [error, setError] = useState('');
     const [formState, setFormState] = useState({ date: '', startTime: '', endTime: '' });
     
+    const [repeat, setRepeat] = useState(false);
+    const [repeatType, setRepeatType] = useState<'daily' | 'weekly'>('daily');
+    const [repeatUntil, setRepeatUntil] = useState('');
+    const [weekdays, setWeekdays] = useState<number[]>([]);
+    const weekdayLabels = useMemo(() => ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'], []);
+
     const fetchReservations = useCallback(() => {
         setIsLoading(true);
         setError('');
@@ -596,37 +648,78 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, en
     useEffect(() => {
         if(isOpen) {
             fetchReservations();
+            const today = new Date();
+            setFormState({ date: today.toISOString().split('T')[0], startTime: '', endTime: '' });
+            setRepeat(false);
+            setRepeatUntil('');
+            setWeekdays([]);
         }
     }, [isOpen, fetchReservations]);
     
+    const handleWeekdayToggle = (dayIndex: number) => {
+        setWeekdays(prev =>
+            prev.includes(dayIndex)
+            ? prev.filter(d => d !== dayIndex)
+            : [...prev, dayIndex].sort()
+        );
+    };
+
     const handleBooking = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
         
-        const start_time = new Date(`${formState.date}T${formState.startTime}`);
-        const end_time = new Date(`${formState.date}T${formState.endTime}`);
+        const reservationsToCreate: { environment_id: string; user_id: string; start_time: string; end_time: string; }[] = [];
+        const baseStartTime = new Date(`${formState.date}T${formState.startTime}`);
+        const baseEndTime = new Date(`${formState.date}T${formState.endTime}`);
 
-        if (start_time >= end_time) {
-            setError("O horário de término deve ser após o horário de início.");
-            return;
-        }
+        if (baseStartTime >= baseEndTime) { setError("O horário de término deve ser após o horário de início."); return; }
+        
+        if (!repeat) {
+            if (baseStartTime < new Date()) { setError("Não é possível criar uma reserva em uma data ou horário passados."); return; }
+            reservationsToCreate.push({
+                environment_id: environment.id,
+                user_id: user.id,
+                start_time: baseStartTime.toISOString(),
+                end_time: baseEndTime.toISOString(),
+            });
+        } else {
+            if (!repeatUntil) { setError('Por favor, defina uma data final para a repetição.'); return; }
+            if (repeatType === 'weekly' && weekdays.length === 0) { setError('Por favor, selecione pelo menos um dia da semana.'); return; }
+            
+            let currentDate = new Date(baseStartTime);
+            const untilDate = new Date(`${repeatUntil}T23:59:59`);
+            if (untilDate < currentDate) { setError('A data final da repetição deve ser após a data de início.'); return; }
 
-        if (start_time < new Date()) {
-            setError("Não é possível criar uma reserva em uma data ou horário passados.");
-            return;
+            while(currentDate <= untilDate) {
+                const shouldAdd = (repeatType === 'daily') || (repeatType === 'weekly' && weekdays.includes(currentDate.getDay()));
+                if(shouldAdd) {
+                    const newStart = new Date(currentDate);
+                    newStart.setHours(baseStartTime.getHours(), baseStartTime.getMinutes());
+                    const newEnd = new Date(currentDate);
+                    newEnd.setHours(baseEndTime.getHours(), baseEndTime.getMinutes());
+                    if(newStart >= new Date()) {
+                        reservationsToCreate.push({
+                            environment_id: environment.id,
+                            user_id: user.id,
+                            start_time: newStart.toISOString(),
+                            end_time: newEnd.toISOString(),
+                        });
+                    }
+                }
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+            if (reservationsToCreate.length === 0) { setError("Nenhuma data válida encontrada no período de repetição selecionado."); return; }
         }
 
         setIsBooking(true);
         try {
-            await createReservation({
-                environment_id: environment.id,
-                user_id: user.id,
-                start_time: start_time.toISOString(),
-                end_time: end_time.toISOString()
-            });
+            await createReservations(reservationsToCreate);
             refreshData();
             fetchReservations();
             setFormState({ date: '', startTime: '', endTime: '' });
+            setRepeat(false);
+            setRepeatUntil('');
+            setWeekdays([]);
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -647,7 +740,47 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, en
                             <input type="time" value={formState.endTime} onChange={e => setFormState(s => ({...s, endTime: e.target.value}))} required className="input-field"/>
                         </div>
                         <style>{`.input-field { padding: 0.5rem 0.75rem; border: 1px solid #D1D5DB; border-radius: 0.5rem; }`}</style>
-                        <button type="submit" disabled={isBooking} className="w-full flex justify-center items-center bg-estacio-red text-white font-bold py-2 rounded-lg hover:bg-opacity-90 disabled:opacity-50">
+                        
+                        <div className="space-y-2 border-t pt-3 mt-3">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" checked={repeat} onChange={e => setRepeat(e.target.checked)} className="h-4 w-4 rounded text-estacio-blue focus:ring-estacio-blue" />
+                                <span className="font-semibold text-gray-700">Repetir reserva</span>
+                            </label>
+
+                            <div className={`grid transition-all duration-500 ease-in-out ${repeat ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                                <div className="overflow-hidden">
+                                <div className="pt-2 pl-6 space-y-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label htmlFor="res-repeatType" className="block text-sm font-medium text-gray-600 mb-1">Frequência</label>
+                                            <select id="res-repeatType" value={repeatType} onChange={e => setRepeatType(e.target.value as 'daily'|'weekly')} className="w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                                                <option value="daily">Diariamente</option>
+                                                <option value="weekly">Semanalmente</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label htmlFor="res-repeatUntil" className="block text-sm font-medium text-gray-600 mb-1">Repetir até</label>
+                                            <input type="date" id="res-repeatUntil" value={repeatUntil} onChange={e => setRepeatUntil(e.target.value)} required={repeat} className="w-full p-2 border border-gray-300 rounded-md shadow-sm" min={formState.date}/>
+                                        </div>
+                                    </div>
+                                    {repeatType === 'weekly' && (
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-600 mb-2">Nos dias:</label>
+                                            <div className="flex flex-wrap gap-2">
+                                                {weekdayLabels.map((day, index) => (
+                                                    <button type="button" key={index} onClick={() => handleWeekdayToggle(index)} className={`h-8 w-10 rounded-md font-bold text-sm transition-colors ${weekdays.includes(index) ? 'bg-estacio-blue text-white shadow' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
+                                                        {day}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="submit" disabled={isBooking || !formState.date || !formState.startTime || !formState.endTime} className="w-full flex justify-center items-center bg-estacio-red text-white font-bold py-2 rounded-lg hover:bg-opacity-90 disabled:opacity-50">
                             {isBooking ? <Spinner /> : "Confirmar Reserva"}
                         </button>
                      </form>
@@ -700,9 +833,15 @@ const CreateReservationModal: React.FC<CreateReservationModalProps> = ({
   const [selectedResources, setSelectedResources] = useState<string[]>([]);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   
+  const [repeat, setRepeat] = useState(false);
+  const [repeatType, setRepeatType] = useState<'daily' | 'weekly'>('daily');
+  const [repeatUntil, setRepeatUntil] = useState('');
+  const [weekdays, setWeekdays] = useState<number[]>([]);
+  const weekdayLabels = useMemo(() => ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'], []);
+  
   useEffect(() => {
     if (isOpen && initialData) {
-      const { hour } = initialData;
+      const { hour, date } = initialData;
       const startTimeStr = `${hour.toString().padStart(2, '0')}:00`;
       const endTimeStr = `${(hour + 1).toString().padStart(2, '0')}:00`;
 
@@ -715,6 +854,10 @@ const CreateReservationModal: React.FC<CreateReservationModalProps> = ({
       setIsSaving(false);
       setSelectedResources([]);
       setIsFilterOpen(false);
+      setRepeat(false);
+      setRepeatUntil('');
+      setWeekdays([date.getDay()]);
+      setRepeatType('weekly');
     }
   }, [isOpen, initialData]);
 
@@ -764,6 +907,14 @@ const CreateReservationModal: React.FC<CreateReservationModalProps> = ({
         : [...prev, resourceId]
     );
   };
+  
+  const handleWeekdayToggle = (dayIndex: number) => {
+    setWeekdays(prev =>
+      prev.includes(dayIndex)
+        ? prev.filter(d => d !== dayIndex)
+        : [...prev, dayIndex].sort()
+    );
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -774,33 +925,55 @@ const CreateReservationModal: React.FC<CreateReservationModalProps> = ({
     e.preventDefault();
     setError('');
 
-    if (!formState.environmentId) {
-        setError('Nenhum ambiente disponível com os filtros selecionados.');
-        return;
-    }
+    if (!formState.environmentId) { setError('Nenhum ambiente disponível com os filtros selecionados.'); return; }
     
+    const reservationsToCreate: { environment_id: string; user_id: string; start_time: string; end_time: string; }[] = [];
     const dateString = initialData.date.toISOString().split('T')[0];
-    const startDateTime = new Date(`${dateString}T${formState.startTime}`);
-    const endDateTime = new Date(`${dateString}T${formState.endTime}`);
+    const baseStartTime = new Date(`${dateString}T${formState.startTime}`);
+    const baseEndTime = new Date(`${dateString}T${formState.endTime}`);
 
-    if (startDateTime >= endDateTime) {
-      setError('O horário de término deve ser após o horário de início.');
-      return;
-    }
+    if (baseStartTime >= baseEndTime) { setError('O horário de término deve ser após o horário de início.'); return; }
 
-    if (startDateTime < new Date()) {
-        setError('Não é possível criar uma reserva em uma data ou horário passados.');
-        return;
+    if (!repeat) {
+        if (baseStartTime < new Date()) { setError('Não é possível criar uma reserva em uma data ou horário passados.'); return; }
+        reservationsToCreate.push({
+            environment_id: formState.environmentId,
+            user_id: user.id,
+            start_time: baseStartTime.toISOString(),
+            end_time: baseEndTime.toISOString(),
+        });
+    } else {
+        if (!repeatUntil) { setError('Por favor, defina uma data final para a repetição.'); return; }
+        if (repeatType === 'weekly' && weekdays.length === 0) { setError('Por favor, selecione pelo menos um dia da semana.'); return; }
+
+        let currentDate = new Date(baseStartTime);
+        const untilDate = new Date(`${repeatUntil}T23:59:59`);
+        if (untilDate < currentDate) { setError('A data final da repetição deve ser após a data de início.'); return; }
+
+        while (currentDate <= untilDate) {
+            const shouldAdd = (repeatType === 'daily') || (repeatType === 'weekly' && weekdays.includes(currentDate.getDay()));
+            if (shouldAdd) {
+                const newStart = new Date(currentDate);
+                newStart.setHours(baseStartTime.getHours(), baseStartTime.getMinutes());
+                const newEnd = new Date(currentDate);
+                newEnd.setHours(baseEndTime.getHours(), baseEndTime.getMinutes());
+                if (newStart >= new Date()) {
+                    reservationsToCreate.push({
+                        environment_id: formState.environmentId,
+                        user_id: user.id,
+                        start_time: newStart.toISOString(),
+                        end_time: newEnd.toISOString(),
+                    });
+                }
+            }
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+        if (reservationsToCreate.length === 0) { setError("Nenhuma data válida encontrada no período de repetição selecionado."); return; }
     }
 
     setIsSaving(true);
     try {
-      await createReservation({
-        environment_id: formState.environmentId,
-        user_id: user.id,
-        start_time: startDateTime.toISOString(),
-        end_time: endDateTime.toISOString(),
-      });
+      await createReservations(reservationsToCreate);
       onSaveSuccess();
     } catch (err: any) {
       setError(err.message);
@@ -814,7 +987,7 @@ const CreateReservationModal: React.FC<CreateReservationModalProps> = ({
       <div className="max-h-[80vh] overflow-y-auto pr-2">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Data</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Data Inicial</label>
             <input
               type="text"
               readOnly
@@ -915,7 +1088,7 @@ const CreateReservationModal: React.FC<CreateReservationModalProps> = ({
             >
               {availableEnvironments.length > 0 ? (
                   availableEnvironments.map(env => (
-                  <option key={env.id} value={env.id}>{env.name}</option>
+                  <option key={env.id} value={env.id}>{env.name} ({env.environment_types?.name || 'Tipo não definido'})</option>
                   ))
               ) : (
                   <option value="">Nenhum ambiente disponível</option>
@@ -923,6 +1096,50 @@ const CreateReservationModal: React.FC<CreateReservationModalProps> = ({
             </select>
           </div>
           
+            <div className="space-y-2 border-t pt-3 mt-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={repeat} onChange={e => setRepeat(e.target.checked)} className="h-4 w-4 rounded text-estacio-blue focus:ring-estacio-blue" />
+                    <span className="font-semibold text-gray-700">Repetir reserva</span>
+                </label>
+
+                 <div className={`grid transition-all duration-500 ease-in-out ${repeat ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                  <div className="overflow-hidden">
+                    <div className="pt-2 pl-6 space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label htmlFor="create-repeatType" className="block text-sm font-medium text-gray-600 mb-1">Frequência</label>
+                                <select id="create-repeatType" value={repeatType} onChange={e => setRepeatType(e.target.value as 'daily'|'weekly')} className="w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                                    <option value="daily">Diariamente</option>
+                                    <option value="weekly">Semanalmente</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label htmlFor="create-repeatUntil" className="block text-sm font-medium text-gray-600 mb-1">Repetir até</label>
+                                <input type="date" id="create-repeatUntil" value={repeatUntil} onChange={e => setRepeatUntil(e.target.value)} required={repeat} className="w-full p-2 border border-gray-300 rounded-md shadow-sm" min={initialData.date.toISOString().split('T')[0]}/>
+                            </div>
+                        </div>
+                        {repeatType === 'weekly' && (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-600 mb-2">Nos dias:</label>
+                                <div className="flex flex-wrap gap-2">
+                                    {weekdayLabels.map((day, index) => (
+                                        <button
+                                            type="button"
+                                            key={index}
+                                            onClick={() => handleWeekdayToggle(index)}
+                                            className={`h-8 w-10 rounded-md font-bold text-sm transition-colors ${weekdays.includes(index) ? 'bg-estacio-blue text-white shadow' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                                        >
+                                            {day}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                  </div>
+                </div>
+            </div>
+
           {error && <p className="text-red-500 text-center text-sm font-semibold bg-red-100 p-2 rounded-md">{error}</p>}
           
           <div className="flex justify-end gap-3 pt-4 border-t mt-4">

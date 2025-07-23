@@ -1,12 +1,19 @@
 
 
+
+
+
+
+
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   getAllEnvironments, addEnvironment, deleteEnvironment, updateEnvironment,
   getAllUsers, updateUserByAdmin, createUserByAdmin, deleteUserByAdmin,
   getAllEnvironmentTypes, addEnvironmentType, updateEnvironmentType, deleteEnvironmentType,
   getAllResources, addResource, updateResource, deleteResource,
-  getReservationsForEnvironment, getUserReservations, getReservationsForMonth, createReservation
+  getReservationsForEnvironment, getUserReservations, getReservationsForMonth, createReservations, cancelReservation,
+  getBackupData, restoreBackupData
 } from '../../services/supabase.ts';
 import type { AppContextType, Environment, User, Reservation, EnvironmentType, Resource } from '../../types';
 import { Page, UserRole } from '../../constants';
@@ -15,7 +22,7 @@ import ConfirmationModal from '../common/ConfirmationModal';
 import Modal from '../common/Modal';
 import ProfileModal from '../common/ProfileModal';
 
-type AdminView = 'calendar' | 'environments' | 'users' | 'types' | 'resources';
+type AdminView = 'calendar' | 'environments' | 'users' | 'types' | 'resources' | 'backup';
 
 const FormField = ({ label, ...props }: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) => (
     <div>
@@ -77,6 +84,7 @@ const AdminScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, se
         case 'types': return <TypesAdminView types={types} refreshData={fetchAllData} />;
         case 'resources': return <ResourcesAdminView resources={resources} refreshData={fetchAllData} />;
         case 'calendar': return <CalendarAdminView environments={environments} resources={resources} allUsers={users} />;
+        case 'backup': return <BackupRestoreView refreshData={fetchAllData} />;
         default: return null;
     }
   }
@@ -102,10 +110,10 @@ const AdminScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, se
       {error && <p className="bg-red-100 text-red-700 p-3 rounded-md mb-4 text-center font-semibold">{error}</p>}
 
       <div className="mb-8">
-        <nav className="flex justify-center" aria-label="Tabs de Gestão">
+        <nav className="flex justify-around" aria-label="Tabs de Gestão">
           <button
             onClick={() => setView('environments')}
-            className={`flex flex-col items-center justify-center w-1/5 py-3 font-semibold transition-colors duration-200 ease-in-out focus:outline-none border-b-4 ${
+            className={`flex-1 flex flex-col items-center justify-center py-3 font-semibold transition-colors duration-200 ease-in-out focus:outline-none border-b-4 ${
               view === 'environments'
                 ? 'border-estacio-blue text-estacio-blue'
                 : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
@@ -117,7 +125,7 @@ const AdminScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, se
           </button>
           <button
             onClick={() => setView('users')}
-            className={`flex flex-col items-center justify-center w-1/5 py-3 font-semibold transition-colors duration-200 ease-in-out focus:outline-none border-b-4 ${
+            className={`flex-1 flex flex-col items-center justify-center py-3 font-semibold transition-colors duration-200 ease-in-out focus:outline-none border-b-4 ${
               view === 'users'
                 ? 'border-estacio-blue text-estacio-blue'
                 : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
@@ -129,7 +137,7 @@ const AdminScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, se
           </button>
           <button
             onClick={() => setView('types')}
-            className={`flex flex-col items-center justify-center w-1/5 py-3 font-semibold transition-colors duration-200 ease-in-out focus:outline-none border-b-4 ${
+            className={`flex-1 flex flex-col items-center justify-center py-3 font-semibold transition-colors duration-200 ease-in-out focus:outline-none border-b-4 ${
               view === 'types'
                 ? 'border-estacio-blue text-estacio-blue'
                 : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
@@ -141,7 +149,7 @@ const AdminScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, se
           </button>
           <button
             onClick={() => setView('resources')}
-            className={`flex flex-col items-center justify-center w-1/5 py-3 font-semibold transition-colors duration-200 ease-in-out focus:outline-none border-b-4 ${
+            className={`flex-1 flex flex-col items-center justify-center py-3 font-semibold transition-colors duration-200 ease-in-out focus:outline-none border-b-4 ${
               view === 'resources'
                 ? 'border-estacio-blue text-estacio-blue'
                 : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
@@ -153,7 +161,7 @@ const AdminScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, se
           </button>
           <button
             onClick={() => setView('calendar')}
-            className={`flex flex-col items-center justify-center w-1/5 py-3 font-semibold transition-colors duration-200 ease-in-out focus:outline-none border-b-4 ${
+            className={`flex-1 flex flex-col items-center justify-center py-3 font-semibold transition-colors duration-200 ease-in-out focus:outline-none border-b-4 ${
               view === 'calendar'
                 ? 'border-estacio-blue text-estacio-blue'
                 : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
@@ -162,6 +170,18 @@ const AdminScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, se
           >
             <i className="bi bi-calendar3-fill text-2xl"></i>
             <span className="text-xs mt-1">Calendário</span>
+          </button>
+          <button
+            onClick={() => setView('backup')}
+            className={`flex-1 flex flex-col items-center justify-center py-3 font-semibold transition-colors duration-200 ease-in-out focus:outline-none border-b-4 ${
+              view === 'backup'
+                ? 'border-estacio-blue text-estacio-blue'
+                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+            }`}
+            aria-current={view === 'backup' ? 'page' : undefined}
+          >
+            <i className="bi bi-hdd-stack-fill text-2xl"></i>
+            <span className="text-xs mt-1">Backup</span>
           </button>
         </nav>
       </div>
@@ -174,6 +194,213 @@ const AdminScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, se
     </div>
   );
 };
+
+const LayoutAdminView: React.FC<{ environments: Environment[], allResources: Resource[] }> = ({ environments, allResources }) => {
+    const [floorSortOrder, setFloorSortOrder] = useState<'asc' | 'desc'>('asc');
+    const [openFloors, setOpenFloors] = useState<Record<string, boolean>>({});
+    const [selectedResources, setSelectedResources] = useState<string[]>([]);
+    const [isFilterOpen, setIsFilterOpen] = useState(false);
+
+    const handleResourceToggle = (resourceId: string) => {
+        setSelectedResources(prev =>
+            prev.includes(resourceId)
+                ? prev.filter(id => id !== resourceId)
+                : [...prev, resourceId]
+        );
+    };
+
+    const handleToggleFloor = (floor: string) => {
+        setOpenFloors(prev => ({ ...prev, [floor]: !prev[floor] }));
+    };
+
+    const getFloorFromLocation = (location: string | null): string => {
+        if (!location) return 'Andar Desconhecido';
+        const match = location.match(/(\d+º\s*andar|térreo)/i);
+        if (match) {
+            const floor = match[0].toLowerCase();
+            if (floor === 'térreo') return 'Térreo';
+            return floor.charAt(0).toUpperCase() + floor.slice(1);
+        }
+        return 'Andar Desconhecido';
+    };
+    
+    const filteredEnvironments = useMemo(() => {
+        if (selectedResources.length === 0) return environments;
+        return environments.filter(env =>
+            selectedResources.every(resId =>
+                env.resources.some(envRes => envRes.id === resId)
+            )
+        );
+    }, [environments, selectedResources]);
+    
+    const environmentsByFloor = useMemo(() => {
+        return filteredEnvironments.reduce((acc, env) => {
+            const floor = getFloorFromLocation(env.location);
+            if (!acc[floor]) {
+                acc[floor] = [];
+            }
+            acc[floor].push(env);
+            return acc;
+        }, {} as Record<string, Environment[]>);
+    }, [filteredEnvironments]);
+
+    const sortedFloors = useMemo(() => {
+        return Object.keys(environmentsByFloor).sort((a, b) => {
+            const getFloorNumber = (floorStr: string) => {
+                if (floorStr.toLowerCase() === 'térreo') return 0;
+                if (floorStr.toLowerCase() === 'andar desconhecido') return 999;
+                const match = floorStr.match(/(\d+)/);
+                return match ? parseInt(match[0], 10) : 998;
+            };
+            const numA = getFloorNumber(a);
+            const numB = getFloorNumber(b);
+            return floorSortOrder === 'asc' ? numA - numB : numB - numA;
+        });
+    }, [environmentsByFloor, floorSortOrder]);
+
+    useEffect(() => {
+        const initialFloorsState = sortedFloors.reduce((acc, floor) => {
+            acc[floor] = false; // Start all floors closed
+            return acc;
+        }, {} as Record<string, boolean>);
+        setOpenFloors(initialFloorsState);
+    }, [environments]); // This dependency is simplified; it resets when the base data changes.
+
+    return (
+        <div className="bg-white rounded-xl shadow-xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+                <i className="bi bi-map-fill text-2xl text-estacio-blue"></i>
+                <h2 className="text-2xl font-semibold text-gray-800">Layout dos Ambientes</h2>
+                <button
+                    onClick={() => setFloorSortOrder(p => p === 'asc' ? 'desc' : 'asc')}
+                    className="p-1 rounded-full text-gray-500 hover:bg-gray-200 hover:text-estacio-blue transition-colors"
+                    title={floorSortOrder === 'asc' ? "Ordenar Descendente" : "Ordenar Ascendente"}
+                    aria-label="Ordenar andares"
+                >
+                    <i className={`bi ${floorSortOrder === 'asc' ? 'bi-sort-numeric-down' : 'bi-sort-numeric-up-alt'} text-xl`}></i>
+                </button>
+            </div>
+            
+             <div className="bg-gray-50 rounded-lg border mb-6">
+                <div
+                    className="flex justify-between items-center p-4 cursor-pointer group"
+                    onClick={() => setIsFilterOpen(!isFilterOpen)}
+                    role="button"
+                    aria-expanded={isFilterOpen}
+                >
+                    <div className="flex items-center gap-3">
+                         <i className="bi bi-filter-circle-fill text-xl text-estacio-blue"></i>
+                        <h3 className="font-semibold text-gray-800">Filtrar por Recursos</h3>
+                        {selectedResources.length > 0 && (
+                            <span className="bg-estacio-blue text-white text-xs font-bold h-5 w-5 rounded-full flex items-center justify-center">
+                                {selectedResources.length}
+                            </span>
+                        )}
+                    </div>
+                    <i className={`bi bi-chevron-down text-2xl text-gray-500 transform transition-transform duration-300 group-hover:text-estacio-blue ${isFilterOpen ? 'rotate-180' : ''}`}></i>
+                </div>
+
+                <div className={`grid transition-all duration-500 ease-in-out ${isFilterOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                    <div className="overflow-hidden">
+                        <div className="p-4 border-t border-gray-200">
+                             {allResources.length > 0 ? (
+                                <div className="flex flex-wrap gap-2 items-center">
+                                    {allResources.map(resource => (
+                                        <button
+                                            key={resource.id}
+                                            type="button"
+                                            onClick={() => handleResourceToggle(resource.id)}
+                                            className={`px-3 py-1 text-sm font-semibold rounded-full transition-colors ${
+                                                selectedResources.includes(resource.id)
+                                                    ? 'bg-estacio-blue text-white shadow'
+                                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                            }`}
+                                        >
+                                            {resource.name}
+                                        </button>
+                                    ))}
+                                    {selectedResources.length > 0 && (
+                                        <button
+                                            onClick={() => setSelectedResources([])}
+                                            className="text-sm text-estacio-red hover:underline ml-auto font-semibold"
+                                            title="Limpar filtros"
+                                        >
+                                            Limpar Filtros
+                                        </button>
+                                    )}
+                                </div>
+                            ) : <p className="text-sm text-gray-500">Nenhum recurso cadastrado para filtrar.</p>}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {sortedFloors.length > 0 ? (
+                <div className="space-y-4">
+                    {sortedFloors.map(floor => {
+                        const isFloorOpen = openFloors[floor] ?? false;
+                        return (
+                            <div key={floor} className="border-t pt-4 first:border-t-0">
+                                <div
+                                    onClick={() => handleToggleFloor(floor)}
+                                    className="flex justify-between items-center cursor-pointer group"
+                                    role="button"
+                                    aria-expanded={isFloorOpen}
+                                    aria-controls={`floor-content-${floor.replace(/\s+/g, '-')}`}
+                                >
+                                    <h3 className="text-xl font-bold text-gray-700 capitalize group-hover:text-estacio-blue transition-colors">{floor}</h3>
+                                    <i className={`bi bi-chevron-down text-2xl text-gray-500 transform transition-transform duration-300 group-hover:text-estacio-blue ${isFloorOpen ? 'rotate-180' : ''}`}></i>
+                                </div>
+                                
+                                <div
+                                    id={`floor-content-${floor.replace(/\s+/g, '-')}`}
+                                    className={`grid transition-all duration-500 ease-in-out ${isFloorOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
+                                >
+                                    <div className="overflow-hidden">
+                                        <div className="pt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                                            {environmentsByFloor[floor].map(env => (
+                                                <div key={env.id} className="border rounded-lg p-4 bg-gray-50 shadow-sm hover:shadow-md transition-shadow duration-300 flex flex-col h-full">
+                                                    <div className="flex-grow">
+                                                        <h4 className="font-bold text-lg text-estacio-blue">{env.name}</h4>
+                                                        <p className="text-sm text-gray-500 mb-3">{env.environment_types?.name}</p>
+                                                        <div className="text-xs text-gray-600">
+                                                            <p className="font-semibold mb-1">Recursos:</p>
+                                                            <ul className="space-y-1">
+                                                                {env.resources.length > 0
+                                                                    ? env.resources.map(r => 
+                                                                        <li key={r.id} className="flex items-center gap-2">
+                                                                            <i className="bi bi-check-circle-fill text-green-500"></i>
+                                                                            <span>{r.name}</span>
+                                                                        </li>
+                                                                    )
+                                                                    : <li className="text-gray-400 italic">Nenhum recurso.</li>
+                                                                }
+                                                            </ul>
+                                                        </div>
+                                                    </div>
+                                                    <div className="mt-3 pt-3 border-t border-gray-200 text-xs text-gray-400">
+                                                        <i className="bi bi-geo-alt-fill mr-1"></i> {env.location || "Localização não informada"}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )
+                    })}
+                </div>
+            ) : (
+                <div className="text-center text-gray-500 py-16">
+                    <i className="bi bi-search text-4xl mb-3"></i>
+                    <p className="font-semibold">Nenhum ambiente encontrado.</p>
+                    <p className="text-sm">Tente ajustar seus filtros ou cadastre novos ambientes.</p>
+                </div>
+            )}
+        </div>
+    );
+};
+
 
 // Generic CRUD view for simple items like Types and Resources
 const SimpleCrudView: React.FC<{
@@ -454,7 +681,7 @@ const EnvironmentsAdminView: React.FC<{ environments: Environment[], types: Envi
               resources={resources} 
               refreshData={refreshData} 
             />
-            <div className="bg-white rounded-xl shadow-xl overflow-hidden transition-all duration-300">
+            <div className="bg-white rounded-xl shadow-xl overflow-hidden">
                 <div className="flex justify-between items-center p-6 cursor-pointer group" onClick={() => setIsListOpen(!isListOpen)}>
                     <div className="flex items-center gap-4">
                         <i className="bi bi-door-open-fill text-2xl text-estacio-blue"></i>
@@ -475,7 +702,7 @@ const EnvironmentsAdminView: React.FC<{ environments: Environment[], types: Envi
                 </div>
                  <div className={`transition-all duration-500 ease-in-out ${isListOpen ? 'max-h-[2000px]' : 'max-h-0'}`}>
                     <div className="px-6 pb-6">
-                        <div className="space-y-3 border-t pt-4 border-gray-200">
+                        <div className="space-y-3 border-t pt-4 border-gray-200 max-h-[60vh] overflow-y-auto pr-2">
                             {sortedEnvironments.length > 0 ? sortedEnvironments.map(env => (
                                 <div key={env.id} onClick={() => setEnvToView(env)} className="bg-gray-50 p-4 rounded-lg flex justify-between items-center gap-4 hover:shadow-md transition-shadow cursor-pointer">
                                     <div><p className="font-bold text-gray-800">{env.name} <span className="font-normal text-gray-500">- {env.environment_types?.name}</span></p><p className="text-sm text-gray-600">{env.location} | Recursos: {env.resources?.map(r => r.name).join(', ') || 'N/A'}</p></div>
@@ -491,6 +718,8 @@ const EnvironmentsAdminView: React.FC<{ environments: Environment[], types: Envi
                     </div>
                 </div>
             </div>
+
+            <LayoutAdminView environments={environments} allResources={resources} />
             
             <ConfirmationModal isOpen={!!envToDelete} onClose={() => setEnvToDelete(null)} onConfirm={confirmDeleteEnvironment} title="Confirmar Exclusão" message={`Tem certeza que deseja excluir o ambiente "${envToDelete?.name}"?`} isConfirming={isDeleting} />
             {envToEdit && <EnvironmentEditModal isOpen={!!envToEdit} onClose={() => setEnvToEdit(null)} environment={envToEdit} onSave={handleUpdateEnvironment} types={types} resources={resources} />}
@@ -715,6 +944,8 @@ const CalendarAdminView: React.FC<{ environments: Environment[]; resources: Reso
     
     const [isCreateModalOpen, setCreateModalOpen] = useState(false);
     const [newReservationData, setNewReservationData] = useState<{ date: Date; hour: number } | null>(null);
+    const [reservationToDelete, setReservationToDelete] = useState<Reservation | null>(null);
+    const [isCancelling, setIsCancelling] = useState(false);
 
     const fetchMonthReservations = useCallback(() => {
         setIsLoading(true);
@@ -729,6 +960,20 @@ const CalendarAdminView: React.FC<{ environments: Environment[]; resources: Reso
     useEffect(() => {
         fetchMonthReservations();
     }, [fetchMonthReservations]);
+
+    const handleCancelReservation = async () => {
+        if (!reservationToDelete) return;
+        setIsCancelling(true);
+        try {
+            await cancelReservation(reservationToDelete.id);
+            setReservationToDelete(null);
+            fetchMonthReservations();
+        } catch (err: any) {
+            alert(err.message);
+        } finally {
+            setIsCancelling(false);
+        }
+    };
 
     const handleDateChange = (offset: number) => {
         setCurrentDate(prev => {
@@ -801,7 +1046,7 @@ const CalendarAdminView: React.FC<{ environments: Environment[]; resources: Reso
             
             {isLoading ? <div className="h-96 flex items-center justify-center"><Spinner /></div> : (
                 <div className="min-h-96">
-                    {displayMode === 'day' && <DayView date={currentDate} reservations={reservations} onTimeSlotClick={handleTimeSlotClick} />}
+                    {displayMode === 'day' && <DayView date={currentDate} reservations={reservations} onTimeSlotClick={handleTimeSlotClick} onDeleteClick={setReservationToDelete} />}
                     {displayMode === 'week' && <WeekView date={currentDate} reservations={reservations} />}
                     {displayMode === 'month' && <MonthView date={currentDate} reservations={reservations} onDateClick={(d) => { setDisplayMode('day'); setCurrentDate(d); }} />}
                     {displayMode === 'list' && <ListView reservations={reservations} />}
@@ -823,11 +1068,20 @@ const CalendarAdminView: React.FC<{ environments: Environment[]; resources: Reso
                     }}
                 />
             )}
+             <ConfirmationModal
+                isOpen={!!reservationToDelete}
+                onClose={() => setReservationToDelete(null)}
+                onConfirm={handleCancelReservation}
+                title="Confirmar Cancelamento"
+                message={<>Tem certeza que deseja cancelar esta reserva?<br/><strong>{reservationToDelete?.environments?.name}</strong> às <strong>{reservationToDelete && new Date(reservationToDelete.start_time).toLocaleString('pt-BR')}</strong></>}
+                isConfirming={isCancelling}
+                confirmButtonText="Sim, Cancelar"
+            />
         </div>
     );
 };
 
-const DayView: React.FC<{ date: Date; reservations: Reservation[]; onTimeSlotClick: (date: Date, hour: number) => void; }> = ({ date, reservations, onTimeSlotClick }) => {
+const DayView: React.FC<{ date: Date; reservations: Reservation[]; onTimeSlotClick: (date: Date, hour: number) => void; onDeleteClick: (reservation: Reservation) => void; }> = ({ date, reservations, onTimeSlotClick, onDeleteClick }) => {
     const dayReservations = reservations.filter(r => areDatesSameDay(new Date(r.start_time), date)).sort((a,b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
     const hours = Array.from({ length: 16 }, (_, i) => i + 7); // 7 AM to 10 PM
     const now = new Date();
@@ -862,10 +1116,20 @@ const DayView: React.FC<{ date: Date; reservations: Reservation[]; onTimeSlotCli
                         <div className={`flex-1 pl-4 py-2 space-y-2 w-full ${isPast ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-blue-50 transition-colors'}`}>
                             {hourReservations.length > 0 ? (
                                 hourReservations.map(res => (
-                                    <div key={res.id} className="bg-blue-100 text-blue-900 p-2 rounded-md text-xs shadow-sm">
-                                        <p className="font-bold">{res.environments?.name}</p>
-                                        <p>{new Date(res.start_time).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})} - {new Date(res.end_time).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</p>
-                                        <p className="text-xs font-semibold italic">{res.users?.name}</p>
+                                    <div key={res.id} className="bg-blue-100 text-blue-900 p-2 rounded-md text-xs shadow-sm flex justify-between items-center">
+                                        <div>
+                                            <p className="font-bold">{res.environments?.name}</p>
+                                            <p>{new Date(res.start_time).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})} - {new Date(res.end_time).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</p>
+                                            <p className="text-xs font-semibold italic">{res.users?.name}</p>
+                                        </div>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); onDeleteClick(res); }}
+                                            className="flex-shrink-0 ml-2 bg-red-100 text-red-600 hover:bg-red-200 h-8 w-8 flex items-center justify-center rounded-full transition-colors"
+                                            title="Cancelar reserva"
+                                            aria-label="Cancelar reserva"
+                                        >
+                                            <i className="bi bi-trash"></i>
+                                        </button>
                                     </div>
                                 ))
                             ) : (
@@ -1039,9 +1303,16 @@ const CreateReservationAdminModal: React.FC<CreateReservationAdminModalProps> = 
   const [selectedResources, setSelectedResources] = useState<string[]>([]);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   
+  // Recurrence state
+  const [repeat, setRepeat] = useState(false);
+  const [repeatType, setRepeatType] = useState<'daily' | 'weekly'>('daily');
+  const [repeatUntil, setRepeatUntil] = useState('');
+  const [weekdays, setWeekdays] = useState<number[]>([]);
+  const weekdayLabels = useMemo(() => ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'], []);
+
   useEffect(() => {
     if (isOpen && initialData) {
-      const { hour } = initialData;
+      const { hour, date } = initialData;
       const startTimeStr = `${hour.toString().padStart(2, '0')}:00`;
       const endTimeStr = `${(hour + 1).toString().padStart(2, '0')}:00`;
 
@@ -1055,6 +1326,10 @@ const CreateReservationAdminModal: React.FC<CreateReservationAdminModalProps> = 
       setIsSaving(false);
       setSelectedResources([]);
       setIsFilterOpen(false);
+      setRepeat(false);
+      setRepeatUntil('');
+      setWeekdays([date.getDay()]);
+      setRepeatType('weekly');
     }
   }, [isOpen, initialData]);
 
@@ -1105,6 +1380,14 @@ const CreateReservationAdminModal: React.FC<CreateReservationAdminModalProps> = 
     );
   };
 
+  const handleWeekdayToggle = (dayIndex: number) => {
+    setWeekdays(prev =>
+      prev.includes(dayIndex)
+        ? prev.filter(d => d !== dayIndex)
+        : [...prev, dayIndex].sort()
+    );
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormState(p => ({ ...p, [name]: value }));
@@ -1114,37 +1397,56 @@ const CreateReservationAdminModal: React.FC<CreateReservationAdminModalProps> = 
     e.preventDefault();
     setError('');
 
-    if (!formState.userId) {
-        setError('Por favor, selecione um usuário para a reserva.');
-        return;
-    }
-    if (!formState.environmentId) {
-        setError('Nenhum ambiente disponível com os filtros selecionados.');
-        return;
-    }
+    if (!formState.userId) { setError('Por favor, selecione um usuário para a reserva.'); return; }
+    if (!formState.environmentId) { setError('Nenhum ambiente disponível com os filtros selecionados.'); return; }
     
+    const reservationsToCreate: { environment_id: string; user_id: string; start_time: string; end_time: string; }[] = [];
     const dateString = initialData.date.toISOString().split('T')[0];
-    const startDateTime = new Date(`${dateString}T${formState.startTime}`);
-    const endDateTime = new Date(`${dateString}T${formState.endTime}`);
+    const baseStartTime = new Date(`${dateString}T${formState.startTime}`);
+    const baseEndTime = new Date(`${dateString}T${formState.endTime}`);
 
-    if (startDateTime >= endDateTime) {
-      setError('O horário de término deve ser após o horário de início.');
-      return;
-    }
+    if (baseStartTime >= baseEndTime) { setError('O horário de término deve ser após o horário de início.'); return; }
 
-    if (startDateTime < new Date()) {
-        setError('Não é possível criar uma reserva em uma data ou horário passados.');
-        return;
+    if (!repeat) {
+        if (baseStartTime < new Date()) { setError('Não é possível criar uma reserva em uma data ou horário passados.'); return; }
+        reservationsToCreate.push({
+            environment_id: formState.environmentId,
+            user_id: formState.userId,
+            start_time: baseStartTime.toISOString(),
+            end_time: baseEndTime.toISOString(),
+        });
+    } else {
+        if (!repeatUntil) { setError('Por favor, defina uma data final para a repetição.'); return; }
+        if (repeatType === 'weekly' && weekdays.length === 0) { setError('Por favor, selecione pelo menos um dia da semana.'); return; }
+
+        let currentDate = new Date(baseStartTime);
+        const untilDate = new Date(`${repeatUntil}T23:59:59`);
+        if (untilDate < currentDate) { setError('A data final da repetição deve ser após a data de início.'); return; }
+
+        while (currentDate <= untilDate) {
+            const shouldAdd = (repeatType === 'daily') || (repeatType === 'weekly' && weekdays.includes(currentDate.getDay()));
+            if (shouldAdd) {
+                const newStart = new Date(currentDate);
+                newStart.setHours(baseStartTime.getHours(), baseStartTime.getMinutes());
+                const newEnd = new Date(currentDate);
+                newEnd.setHours(baseEndTime.getHours(), baseEndTime.getMinutes());
+                if (newStart >= new Date()) {
+                    reservationsToCreate.push({
+                        environment_id: formState.environmentId,
+                        user_id: formState.userId,
+                        start_time: newStart.toISOString(),
+                        end_time: newEnd.toISOString(),
+                    });
+                }
+            }
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+        if (reservationsToCreate.length === 0) { setError("Nenhuma data válida encontrada no período de repetição selecionado."); return; }
     }
 
     setIsSaving(true);
     try {
-      await createReservation({
-        environment_id: formState.environmentId,
-        user_id: formState.userId,
-        start_time: startDateTime.toISOString(),
-        end_time: endDateTime.toISOString(),
-      });
+      await createReservations(reservationsToCreate);
       onSaveSuccess();
     } catch (err: any) {
       setError(err.message);
@@ -1158,7 +1460,7 @@ const CreateReservationAdminModal: React.FC<CreateReservationAdminModalProps> = 
       <div className="max-h-[80vh] overflow-y-auto pr-2">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Data</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Data Inicial</label>
             <input
               type="text"
               readOnly
@@ -1217,10 +1519,54 @@ const CreateReservationAdminModal: React.FC<CreateReservationAdminModalProps> = 
                 </span>
             </div>
             <select id="environmentId" name="environmentId" value={formState.environmentId} onChange={handleInputChange} required disabled={availableEnvironments.length === 0} className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-estacio-blue focus:border-estacio-blue disabled:bg-gray-100 disabled:cursor-not-allowed">
-              {availableEnvironments.length > 0 ? ( availableEnvironments.map(env => ( <option key={env.id} value={env.id}>{env.name}</option> )) ) : ( <option value="">Nenhum ambiente disponível</option> )}
+              {availableEnvironments.length > 0 ? ( availableEnvironments.map(env => ( <option key={env.id} value={env.id}>{env.name} ({env.environment_types?.name || 'Tipo não definido'})</option> )) ) : ( <option value="">Nenhum ambiente disponível</option> )}
             </select>
           </div>
           
+            <div className="space-y-2 border-t pt-3 mt-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={repeat} onChange={e => setRepeat(e.target.checked)} className="h-4 w-4 rounded text-estacio-blue focus:ring-estacio-blue" />
+                    <span className="font-semibold text-gray-700">Repetir reserva</span>
+                </label>
+
+                <div className={`grid transition-all duration-500 ease-in-out ${repeat ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                  <div className="overflow-hidden">
+                    <div className="pt-2 pl-6 space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label htmlFor="repeatType" className="block text-sm font-medium text-gray-600 mb-1">Frequência</label>
+                                <select id="repeatType" value={repeatType} onChange={e => setRepeatType(e.target.value as 'daily'|'weekly')} className="w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                                    <option value="daily">Diariamente</option>
+                                    <option value="weekly">Semanalmente</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label htmlFor="repeatUntil" className="block text-sm font-medium text-gray-600 mb-1">Repetir até</label>
+                                <input type="date" id="repeatUntil" value={repeatUntil} onChange={e => setRepeatUntil(e.target.value)} required={repeat} className="w-full p-2 border border-gray-300 rounded-md shadow-sm" min={initialData.date.toISOString().split('T')[0]}/>
+                            </div>
+                        </div>
+                        {repeatType === 'weekly' && (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-600 mb-2">Nos dias:</label>
+                                <div className="flex flex-wrap gap-2">
+                                    {weekdayLabels.map((day, index) => (
+                                        <button
+                                            type="button"
+                                            key={index}
+                                            onClick={() => handleWeekdayToggle(index)}
+                                            className={`h-8 w-10 rounded-md font-bold text-sm transition-colors ${weekdays.includes(index) ? 'bg-estacio-blue text-white shadow' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                                        >
+                                            {day}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                  </div>
+                </div>
+            </div>
+
           {error && <p className="text-red-500 text-center text-sm font-semibold bg-red-100 p-2 rounded-md">{error}</p>}
           
           <div className="flex justify-end gap-3 pt-4 border-t mt-4">
@@ -1234,5 +1580,153 @@ const CreateReservationAdminModal: React.FC<CreateReservationAdminModalProps> = 
     </Modal>
   );
 };
+
+const BackupRestoreView: React.FC<{ refreshData: () => Promise<void> }> = ({ refreshData }) => {
+  const [isLoadingBackup, setIsLoadingBackup] = useState(false);
+  const [isLoadingRestore, setIsLoadingRestore] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+
+  const handleCreateBackup = async () => {
+    setIsLoadingBackup(true);
+    setError('');
+    setSuccess('');
+    try {
+      const backupData = await getBackupData();
+      const jsonString = JSON.stringify(backupData, null, 2);
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const date = new Date().toISOString().split('T')[0];
+      link.download = `backup_reserva_ambientes_${date}.json`;
+      link.href = url;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      setSuccess('Backup criado e baixado com sucesso!');
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoadingBackup(false);
+    }
+  };
+  
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setError('');
+    setSuccess('');
+    if (e.target.files && e.target.files[0]) {
+      setRestoreFile(e.target.files[0]);
+    } else {
+      setRestoreFile(null);
+    }
+  };
+  
+  const handleConfirmRestore = async () => {
+    if (!restoreFile) return;
+
+    setIsLoadingRestore(true);
+    setError('');
+    setSuccess('');
+    setIsConfirmModalOpen(false);
+    
+    const fileReader = new FileReader();
+    fileReader.onload = async (event) => {
+        try {
+            const result = event.target?.result;
+            if (typeof result !== 'string') {
+                throw new Error('Falha ao ler o arquivo.');
+            }
+            const backupData = JSON.parse(result);
+            
+            await restoreBackupData(backupData);
+            setSuccess('Sistema restaurado com sucesso! A página será atualizada em breve.');
+             setTimeout(() => {
+                window.location.reload();
+            }, 2500);
+
+        } catch (err: any) {
+            setError(err.message);
+            setIsLoadingRestore(false);
+        }
+    };
+    fileReader.onerror = () => {
+        setError('Falha ao ler o arquivo de backup.');
+        setIsLoadingRestore(false);
+    };
+    fileReader.readAsText(restoreFile);
+  };
+
+  return (
+    <div className="space-y-8">
+        {success && <p className="bg-green-100 text-green-700 p-3 rounded-md text-center font-semibold">{success}</p>}
+        {error && <p className="bg-red-100 text-red-700 p-3 rounded-md text-center font-semibold">{error}</p>}
+      
+      {/* Backup Section */}
+      <div className="bg-white rounded-xl shadow-xl p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <i className="bi bi-download text-2xl text-estacio-blue"></i>
+          <h2 className="text-2xl font-semibold text-gray-800">Criar Backup</h2>
+        </div>
+        <p className="text-gray-600 mb-4">
+          Crie um arquivo de backup (.json) contendo todos os dados do sistema, incluindo usuários, ambientes, recursos e reservas. Guarde este arquivo em um local seguro.
+        </p>
+        <button 
+          onClick={handleCreateBackup} 
+          disabled={isLoadingBackup || isLoadingRestore}
+          className="w-full flex items-center justify-center gap-2 bg-estacio-blue hover:bg-opacity-90 text-white font-bold py-3 px-4 rounded-lg disabled:opacity-50"
+        >
+          {isLoadingBackup ? <Spinner /> : "Criar e Baixar Backup"}
+        </button>
+      </div>
+
+      {/* Restore Section */}
+      <div className="bg-white rounded-xl shadow-xl p-6 border-2 border-red-300">
+        <div className="flex items-center gap-3 mb-4">
+          <i className="bi bi-upload text-2xl text-estacio-red"></i>
+          <h2 className="text-2xl font-semibold text-gray-800">Restaurar a partir de um Arquivo</h2>
+        </div>
+        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4" role="alert">
+          <p className="font-bold">Atenção! Ação Destrutiva!</p>
+          <p>Restaurar a partir de um arquivo irá <strong>APAGAR TODOS OS DADOS ATUAIS</strong> do sistema e substituí-los pelos dados do arquivo de backup. Esta ação é irreversível.</p>
+        </div>
+        
+        <div className="space-y-4">
+            <div>
+                <label htmlFor="restore-file" className="block text-sm font-medium text-gray-700 mb-1">Arquivo de Backup (.json)</label>
+                <input 
+                    type="file" 
+                    id="restore-file" 
+                    accept=".json"
+                    onChange={handleFileChange}
+                    disabled={isLoadingRestore || isLoadingBackup}
+                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-estacio-blue file:text-white hover:file:bg-opacity-90"
+                />
+            </div>
+            <button 
+              onClick={() => setIsConfirmModalOpen(true)} 
+              disabled={!restoreFile || isLoadingRestore || isLoadingBackup}
+              className="w-full flex items-center justify-center gap-2 bg-estacio-red hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg disabled:opacity-50"
+            >
+              {isLoadingRestore ? <Spinner /> : "Restaurar Sistema"}
+            </button>
+        </div>
+      </div>
+      
+      <ConfirmationModal
+        isOpen={isConfirmModalOpen}
+        onClose={() => setIsConfirmModalOpen(false)}
+        onConfirm={handleConfirmRestore}
+        title="Confirmar Restauração do Sistema"
+        message={<>Tem certeza de que deseja continuar? Todos os dados atuais serão <strong>permanentemente apagados</strong> e substituídos pelo conteúdo do arquivo <strong>{restoreFile?.name}</strong>.</>}
+        isConfirming={isLoadingRestore}
+        confirmButtonText="Sim, Restaurar"
+      />
+    </div>
+  );
+};
+
 
 export default AdminScreen;
