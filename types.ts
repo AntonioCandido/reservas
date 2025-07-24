@@ -40,7 +40,11 @@ export interface Reservation {
   end_time: string;
   status: 'approved' | 'pending' | 'cancelled';
   users: { name: string; email: string } | null;
-  environments: { name: string; location: string } | null;
+  environments: {
+    name: string;
+    location: string | null;
+    environment_types?: { name: string; } | null;
+  } | null;
 }
 
 

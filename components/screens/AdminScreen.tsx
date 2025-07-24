@@ -1,18 +1,10 @@
-
-
-
-
-
-
-
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   getAllEnvironments, addEnvironment, deleteEnvironment, updateEnvironment,
   getAllUsers, updateUserByAdmin, createUserByAdmin, deleteUserByAdmin,
   getAllEnvironmentTypes, addEnvironmentType, updateEnvironmentType, deleteEnvironmentType,
   getAllResources, addResource, updateResource, deleteResource,
-  getReservationsForEnvironment, getUserReservations, getReservationsForMonth, createReservations, cancelReservation,
+  getReservationsForEnvironment, getUserReservations, getReservationsForMonth, createReservations, cancelReservation, updateReservation,
   getBackupData, restoreBackupData
 } from '../../services/supabase.ts';
 import type { AppContextType, Environment, User, Reservation, EnvironmentType, Resource } from '../../types';
@@ -24,12 +16,19 @@ import ProfileModal from '../common/ProfileModal';
 
 type AdminView = 'calendar' | 'environments' | 'users' | 'types' | 'resources' | 'backup';
 
-const FormField = ({ label, ...props }: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) => (
+const FormField = ({ label, ...props }: { label: string } & React.InputHTMLAttributes<HTMLInputElement | HTMLSelectElement> & { as?: 'input' | 'select', children?: React.ReactNode }) => (
     <div>
         <label htmlFor={props.id || props.name} className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-        <input {...props} className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-estacio-blue focus:border-estacio-blue" />
+        {props.as === 'select' ? (
+             <select {...(props as React.SelectHTMLAttributes<HTMLSelectElement>)} className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-estacio-blue focus:border-estacio-blue">
+                {props.children}
+             </select>
+        ) : (
+            <input {...(props as React.InputHTMLAttributes<HTMLInputElement>)} className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-estacio-blue focus:border-estacio-blue" />
+        )}
     </div>
 );
+
 
 const DetailItem = ({ label, value }: { label: string; value: React.ReactNode }) => (
   <div className="py-2"><p className="text-sm font-semibold text-gray-500">{label}</p><p className="text-md text-gray-800">{value || 'N/A'}</p></div>
@@ -63,7 +62,8 @@ const AdminScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, se
     } catch (err: any) {
       setError(err.message);
       console.error(err);
-    } finally {
+    }
+    finally {
       setIsLoading(false);
     }
   }, []);
@@ -638,7 +638,7 @@ const UsersAdminView: React.FC<{ users: User[], refreshData: () => Promise<void>
 
 const EnvironmentsAdminView: React.FC<{ environments: Environment[], types: EnvironmentType[], resources: Resource[], refreshData: () => Promise<void> }> = ({ environments, types, resources, refreshData }) => {
     const [isFormOpen, setIsFormOpen] = useState(false);
-    const [isListOpen, setIsListOpen] = useState(false);
+    const [isListOpen, setIsListOpen] = useState(true);
     const [envToEdit, setEnvToEdit] = useState<Environment | null>(null);
     const [envToDelete, setEnvToDelete] = useState<Environment | null>(null);
     const [envToView, setEnvToView] = useState<Environment | null>(null);
@@ -704,12 +704,20 @@ const EnvironmentsAdminView: React.FC<{ environments: Environment[], types: Envi
                     <div className="px-6 pb-6">
                         <div className="space-y-3 border-t pt-4 border-gray-200 max-h-[60vh] overflow-y-auto pr-2">
                             {sortedEnvironments.length > 0 ? sortedEnvironments.map(env => (
-                                <div key={env.id} onClick={() => setEnvToView(env)} className="bg-gray-50 p-4 rounded-lg flex justify-between items-center gap-4 hover:shadow-md transition-shadow cursor-pointer">
-                                    <div><p className="font-bold text-gray-800">{env.name} <span className="font-normal text-gray-500">- {env.environment_types?.name}</span></p><p className="text-sm text-gray-600">{env.location} | Recursos: {env.resources?.map(r => r.name).join(', ') || 'N/A'}</p></div>
-                                    <div className="flex items-center gap-2">
-                                        <button onClick={(e) => { e.stopPropagation(); setEnvToEdit(env); }} className="bg-blue-100 text-blue-600 h-10 w-10 flex items-center justify-center rounded-full" title="Editar" aria-label={`Editar ambiente ${env.name}`}><i className="bi bi-pencil-square"></i></button>
-                                        <button onClick={(e) => { e.stopPropagation(); setEnvToDelete(env); }} className="bg-red-100 text-red-600 h-10 w-10 flex items-center justify-center rounded-full" title="Excluir" aria-label={`Excluir ambiente ${env.name}`}><i className="bi bi-trash"></i></button>
-                                    </div>
+                                <div 
+                                    key={env.id} 
+                                    onClick={() => setEnvToView(env)} 
+                                    className="bg-gray-50 p-4 rounded-lg hover:shadow-lg hover:border-estacio-blue border border-transparent transition-all duration-300 cursor-pointer flex justify-between items-center"
+                                    role="button"
+                                    tabIndex={0}
+                                    onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setEnvToView(env)}
+                                >
+                                  <div>
+                                    <p className="font-bold text-gray-800">{env.name} <span className="font-normal text-gray-600">- {env.environment_types?.name}</span></p>
+                                    <p className="text-sm text-gray-500">{env.location}</p>
+                                    <p className="text-xs text-gray-500 mt-2">Recursos: {env.resources?.map(r => r.name).join(', ') || 'N/A'}</p>
+                                  </div>
+                                  <i className="bi bi-chevron-right text-xl text-gray-400 group-hover:text-estacio-blue transition-colors"></i>
                                 </div>
                             )) : (
                                 <p className="text-center text-gray-500 py-8">Nenhum ambiente cadastrado.</p>
@@ -723,7 +731,21 @@ const EnvironmentsAdminView: React.FC<{ environments: Environment[], types: Envi
             
             <ConfirmationModal isOpen={!!envToDelete} onClose={() => setEnvToDelete(null)} onConfirm={confirmDeleteEnvironment} title="Confirmar Exclusão" message={`Tem certeza que deseja excluir o ambiente "${envToDelete?.name}"?`} isConfirming={isDeleting} />
             {envToEdit && <EnvironmentEditModal isOpen={!!envToEdit} onClose={() => setEnvToEdit(null)} environment={envToEdit} onSave={handleUpdateEnvironment} types={types} resources={resources} />}
-            {envToView && <EnvironmentDetailsModal isOpen={!!envToView} onClose={() => setEnvToView(null)} environment={envToView} />}
+            {envToView && (
+                <EnvironmentDetailsModal
+                    isOpen={!!envToView}
+                    onClose={() => setEnvToView(null)}
+                    environment={envToView}
+                    onEdit={(env) => {
+                        setEnvToView(null);
+                        setEnvToEdit(env);
+                    }}
+                    onDelete={(env) => {
+                        setEnvToView(null);
+                        setEnvToDelete(env);
+                    }}
+                />
+            )}
         </div>
     );
 };
@@ -909,18 +931,65 @@ const UserAddModal: React.FC<{ isOpen: boolean, onClose: () => void, onSave: Fun
     );
 };
 
-const EnvironmentDetailsModal: React.FC<{ isOpen: boolean; onClose: () => void; environment: Environment; }> = ({ isOpen, onClose, environment }) => {
+const EnvironmentDetailsModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  environment: Environment;
+  onEdit: (env: Environment) => void;
+  onDelete: (env: Environment) => void;
+}> = ({ isOpen, onClose, environment, onEdit, onDelete }) => {
     const [reservations, setReservations] = useState<Reservation[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     useEffect(() => {
         if(isOpen) { setIsLoading(true); getReservationsForEnvironment(environment.id).then(setReservations).catch(console.error).finally(() => setIsLoading(false)); }
     }, [isOpen, environment.id]);
+    
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={`Detalhes de ${environment.name}`}>
-            <div className="max-h-[75vh] overflow-y-auto pr-2 space-y-4">
-                <div className="grid grid-cols-2 gap-x-4 border-b pb-4"><DetailItem label="Tipo" value={environment.environment_types?.name} /><DetailItem label="Localização" value={environment.location} /><DetailItem label="Recursos" value={environment.resources?.map(r => r.name).join(', ')} /></div>
-                <div><h4 className="text-lg font-semibold text-gray-800 mb-2">Próximas Reservas</h4>{isLoading ? <Spinner/> : <ul className="space-y-2">{reservations.length > 0 ? reservations.map(res => <li key={res.id} className="bg-blue-50 p-3 rounded-md text-sm"><p className="font-bold">{res.users?.name}</p><p>{new Date(res.start_time).toLocaleString('pt-BR')} - {new Date(res.end_time).toLocaleTimeString('pt-BR')}</p></li>) : <p className="text-center p-4">Nenhuma reserva.</p>}</ul>}</div>
-            </div>
+        <Modal isOpen={isOpen} onClose={onClose} title={'Detalhes do Ambiente'}>
+            <>
+                <div className="max-h-[70vh] overflow-y-auto pr-2 space-y-4">
+                    <div>
+                        <h3 className="text-2xl font-bold text-estacio-blue">{environment.name}</h3>
+                        <p className="text-lg text-gray-600 mb-4">{environment.environment_types?.name || 'Tipo não definido'}</p>
+                        <div className="border-t pt-4 space-y-2">
+                            <DetailItem label="Localização" value={environment.location} />
+                            <DetailItem label="Recursos" value={environment.resources?.map(r => r.name).join(', ') || 'Nenhum'} />
+                        </div>
+                    </div>
+
+                    <div>
+                        <h4 className="text-lg font-semibold text-gray-800 mb-2 pt-4 border-t">Próximas Reservas</h4>
+                        {isLoading ? <Spinner/> : (
+                            <ul className="space-y-2 max-h-48 overflow-y-auto">
+                                {reservations.length > 0 ? reservations.map(res => (
+                                    <li key={res.id} className="bg-blue-50 p-3 rounded-md text-sm">
+                                        <p className="font-bold">{res.users?.name}</p>
+                                        <p>{new Date(res.start_time).toLocaleString('pt-BR')} - {new Date(res.end_time).toLocaleTimeString('pt-BR')}</p>
+                                    </li>
+                                )) : <p className="text-center p-4">Nenhuma reserva futura encontrada.</p>}
+                            </ul>
+                        )}
+                    </div>
+                </div>
+                <div className="flex justify-end gap-3 pt-4 border-t mt-4">
+                    <button
+                        onClick={() => onEdit(environment)}
+                        className="flex items-center justify-center gap-2 bg-estacio-blue text-white font-bold py-2 px-4 rounded-lg hover:bg-opacity-90 transition-colors"
+                        aria-label={`Editar ambiente ${environment.name}`}
+                    >
+                        <i className="bi bi-pencil-square"></i>
+                        <span>Editar</span>
+                    </button>
+                    <button
+                        onClick={() => onDelete(environment)}
+                        className="flex items-center justify-center gap-2 bg-estacio-red text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700 transition-colors"
+                        aria-label={`Excluir ambiente ${environment.name}`}
+                    >
+                        <i className="bi bi-trash"></i>
+                        <span>Excluir</span>
+                    </button>
+                </div>
+            </>
         </Modal>
     );
 };
@@ -928,7 +997,7 @@ const EnvironmentDetailsModal: React.FC<{ isOpen: boolean; onClose: () => void; 
 
 // --- Calendar Components ---
 
-type CalendarDisplayMode = 'day' | 'week' | 'month' | 'list' | 'resource';
+type CalendarDisplayMode = 'day' | 'week' | 'month' | 'list' | 'year';
 
 const areDatesSameDay = (d1: Date, d2: Date) =>
   d1.getFullYear() === d2.getFullYear() &&
@@ -946,6 +1015,7 @@ const CalendarAdminView: React.FC<{ environments: Environment[]; resources: Reso
     const [newReservationData, setNewReservationData] = useState<{ date: Date; hour: number } | null>(null);
     const [reservationToDelete, setReservationToDelete] = useState<Reservation | null>(null);
     const [isCancelling, setIsCancelling] = useState(false);
+    const [reservationToEdit, setReservationToEdit] = useState<Reservation | null>(null);
 
     const fetchMonthReservations = useCallback(() => {
         setIsLoading(true);
@@ -980,6 +1050,7 @@ const CalendarAdminView: React.FC<{ environments: Environment[]; resources: Reso
             const newDate = new Date(prev);
             if (displayMode === 'day') newDate.setDate(prev.getDate() + offset);
             else if (displayMode === 'week') newDate.setDate(prev.getDate() + offset * 7);
+            else if (displayMode === 'year') newDate.setFullYear(prev.getFullYear() + offset);
             else newDate.setMonth(prev.getMonth() + offset);
             return newDate;
         });
@@ -987,9 +1058,9 @@ const CalendarAdminView: React.FC<{ environments: Environment[]; resources: Reso
 
     const handleTimeSlotClick = (date: Date, hour: number) => {
         const now = new Date();
-        const slotDateTime = new Date(date);
-        slotDateTime.setHours(hour, 59, 59, 999);
-        if (slotDateTime < now) return;
+        const slotStartDateTime = new Date(date);
+        slotStartDateTime.setHours(hour, 0, 0, 0);
+        if (slotStartDateTime < now) return;
 
         setNewReservationData({ date, hour });
         setCreateModalOpen(true);
@@ -997,22 +1068,23 @@ const CalendarAdminView: React.FC<{ environments: Environment[]; resources: Reso
 
     const getHeaderText = () => {
         if (displayMode === 'day') return currentDate.toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-        if (displayMode === 'week' || displayMode === 'resource') {
+        if (displayMode === 'week') {
             const startOfWeek = new Date(currentDate);
             startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
             const endOfWeek = new Date(startOfWeek);
             endOfWeek.setDate(startOfWeek.getDate() + 6);
             return `${startOfWeek.toLocaleDateString('pt-BR')} - ${endOfWeek.toLocaleDateString('pt-BR')}`;
         }
+        if (displayMode === 'year') return currentDate.getFullYear().toString();
         return currentDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
     };
 
-    const viewOptions: { key: CalendarDisplayMode; label: string; icon: string }[] = [
+    const viewOptions: { key: CalendarDisplayMode; label: string; icon: string; disabled?: boolean }[] = [
         { key: 'day', label: 'Dia', icon: 'bi-calendar-day' },
         { key: 'week', label: 'Semana', icon: 'bi-calendar-week' },
         { key: 'month', label: 'Mês', icon: 'bi-calendar-month' },
-        { key: 'list', label: 'Lista', icon: 'bi-list-ul' },
-        { key: 'resource', label: 'Ambiente', icon: 'bi-building' },
+        { key: 'year', label: 'Ano', icon: 'bi-calendar', disabled: true },
+        { key: 'list', label: 'Agenda', icon: 'bi-list-ul' },
     ];
     
     const filteredReservations = selectedEnvironmentId ? reservations.filter(r => r.environment_id === selectedEnvironmentId) : reservations;
@@ -1028,29 +1100,20 @@ const CalendarAdminView: React.FC<{ environments: Environment[]; resources: Reso
                 <h3 className="text-lg sm:text-xl font-bold text-center text-gray-800 capitalize">{getHeaderText()}</h3>
                 <div className="flex justify-center border border-gray-200 rounded-lg p-1 bg-gray-50">
                     {viewOptions.map(opt => (
-                        <button key={opt.key} onClick={() => setDisplayMode(opt.key)} className={`px-3 py-1.5 text-sm font-bold rounded-md transition-all duration-300 ${displayMode === opt.key ? 'bg-estacio-blue text-white shadow' : 'text-gray-600 hover:bg-gray-200'}`} title={opt.label}>
+                        <button key={opt.key} onClick={() => !opt.disabled && setDisplayMode(opt.key)} disabled={opt.disabled} className={`px-3 py-1.5 text-sm font-bold rounded-md transition-all duration-300 ${displayMode === opt.key ? 'bg-estacio-blue text-white shadow' : 'text-gray-600 hover:bg-gray-200'} ${opt.disabled ? 'opacity-50 cursor-not-allowed' : ''}`} title={opt.label}>
                             <i className={`${opt.icon} sm:mr-2`}></i><span className="hidden sm:inline">{opt.label}</span>
                         </button>
                     ))}
                 </div>
             </div>
-
-            {displayMode === 'resource' && (
-                <div className="mb-4">
-                    <select onChange={(e) => setSelectedEnvironmentId(e.target.value)} value={selectedEnvironmentId || ''} className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-estacio-blue focus:border-estacio-blue">
-                        <option value="">Selecione o Ambiente para filtrar</option>
-                        {environments.map(env => <option key={env.id} value={env.id}>{env.name}</option>)}
-                    </select>
-                </div>
-            )}
             
             {isLoading ? <div className="h-96 flex items-center justify-center"><Spinner /></div> : (
                 <div className="min-h-96">
-                    {displayMode === 'day' && <DayView date={currentDate} reservations={reservations} onTimeSlotClick={handleTimeSlotClick} onDeleteClick={setReservationToDelete} />}
+                    {displayMode === 'day' && <DayView date={currentDate} reservations={reservations} onTimeSlotClick={handleTimeSlotClick} onDeleteClick={setReservationToDelete} onEditClick={setReservationToEdit} />}
                     {displayMode === 'week' && <WeekView date={currentDate} reservations={reservations} />}
                     {displayMode === 'month' && <MonthView date={currentDate} reservations={reservations} onDateClick={(d) => { setDisplayMode('day'); setCurrentDate(d); }} />}
+                    {displayMode === 'year' && <div className="text-center p-16 text-gray-500">Visualização "Ano" ainda não implementada.</div>}
                     {displayMode === 'list' && <ListView reservations={reservations} />}
-                    {displayMode === 'resource' && <WeekView date={currentDate} reservations={filteredReservations} />}
                 </div>
             )}
             {isCreateModalOpen && newReservationData && (
@@ -1077,83 +1140,122 @@ const CalendarAdminView: React.FC<{ environments: Environment[]; resources: Reso
                 isConfirming={isCancelling}
                 confirmButtonText="Sim, Cancelar"
             />
+            {reservationToEdit && (
+                <EditReservationAdminModal 
+                    isOpen={!!reservationToEdit}
+                    onClose={() => setReservationToEdit(null)}
+                    reservation={reservationToEdit}
+                    environments={environments}
+                    allUsers={allUsers}
+                    onSaveSuccess={() => {
+                        setReservationToEdit(null);
+                        fetchMonthReservations();
+                    }}
+                />
+            )}
         </div>
     );
 };
 
-const DayView: React.FC<{ date: Date; reservations: Reservation[]; onTimeSlotClick: (date: Date, hour: number) => void; onDeleteClick: (reservation: Reservation) => void; }> = ({ date, reservations, onTimeSlotClick, onDeleteClick }) => {
-    const dayReservations = reservations.filter(r => areDatesSameDay(new Date(r.start_time), date)).sort((a,b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
-    const hours = Array.from({ length: 16 }, (_, i) => i + 7); // 7 AM to 10 PM
+const DayView: React.FC<{ date: Date; reservations: Reservation[]; onTimeSlotClick: (date: Date, hour: number) => void; onDeleteClick: (reservation: Reservation) => void; onEditClick: (reservation: Reservation) => void; }> = ({ date, reservations, onTimeSlotClick, onDeleteClick, onEditClick }) => {
+    const dayReservations = reservations.filter(r => areDatesSameDay(new Date(r.start_time), date));
+    const hours = Array.from({ length: 16 }, (_, i) => i + 7); // 7 AM to 10 PM (22:00)
     const now = new Date();
 
-    const reservationsByHour = dayReservations.reduce((acc, res) => {
-        const startHour = new Date(res.start_time).getHours();
-        if (!acc[startHour]) {
-            acc[startHour] = [];
-        }
-        acc[startHour].push(res);
-        return acc;
-    }, {} as Record<number, Reservation[]>);
+    const getMinutesFromMidnight = (d: Date) => d.getHours() * 60 + d.getMinutes();
+    const timelineStartMinutes = 7 * 60; // 7 AM
+    const timelineEndMinutes = 22 * 60; // 10 PM
 
     return (
-        <div className="border rounded-lg p-2 max-h-[60vh] overflow-y-auto">
-            {hours.map(hour => {
-                const hourReservations = reservationsByHour[hour] || [];
-                const slotEndDateTime = new Date(date);
-                slotEndDateTime.setHours(hour, 59, 59, 999);
-                const isPast = slotEndDateTime < now;
+        <div className="relative border rounded-lg max-h-[70vh] overflow-y-auto">
+            {/* Hour markers and grid lines */}
+            <div className="relative">
+                {hours.map(hour => {
+                    const slotStartDateTime = new Date(date);
+                    slotStartDateTime.setHours(hour, 0, 0, 0);
+                    const isPast = slotStartDateTime < now;
 
-                return (
-                    <div 
-                        key={hour} 
-                        className={`flex border-b last:border-b-0 min-h-[4rem] group ${isPast ? 'bg-gray-100' : ''}`}
-                        onClick={() => !isPast && onTimeSlotClick(date, hour)}
-                        role="button"
-                        aria-disabled={isPast}
-                        aria-label={isPast ? `Horário passado: ${hour}:00` : `Agendar para ${hour}:00`}
-                    >
-                        <div className={`w-20 text-right pr-4 py-2 text-sm border-r flex-shrink-0 ${isPast ? 'text-gray-400' : 'text-gray-500'}`}>{hour}:00</div>
-                        <div className={`flex-1 pl-4 py-2 space-y-2 w-full ${isPast ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-blue-50 transition-colors'}`}>
-                            {hourReservations.length > 0 ? (
-                                hourReservations.map(res => (
-                                    <div key={res.id} className="bg-blue-100 text-blue-900 p-2 rounded-md text-xs shadow-sm flex justify-between items-center">
-                                        <div>
-                                            <p className="font-bold">{res.environments?.name}</p>
-                                            <p>{new Date(res.start_time).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})} - {new Date(res.end_time).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</p>
-                                            <p className="text-xs font-semibold italic">{res.users?.name}</p>
-                                        </div>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); onDeleteClick(res); }}
-                                            className="flex-shrink-0 ml-2 bg-red-100 text-red-600 hover:bg-red-200 h-8 w-8 flex items-center justify-center rounded-full transition-colors"
-                                            title="Cancelar reserva"
-                                            aria-label="Cancelar reserva"
-                                        >
-                                            <i className="bi bi-trash"></i>
-                                        </button>
+                    return (
+                        <div
+                            key={hour}
+                            className={`flex items-start border-b last:border-b-0 group ${isPast ? 'bg-gray-50' : 'cursor-pointer hover:bg-blue-50'}`}
+                            style={{ height: '60px' }} // 60px per hour
+                            onClick={() => !isPast && onTimeSlotClick(date, hour)}
+                        >
+                            <div className={`w-20 text-right pr-4 pt-1 text-xs flex-shrink-0 ${isPast ? 'text-gray-400' : 'text-gray-500'}`}>
+                                {hour}:00
+                            </div>
+                            <div className="w-full h-full border-l">
+                                {!isPast && (
+                                    <div className="h-full flex items-center opacity-0 group-hover:opacity-100 transition-opacity pl-4">
+                                        <p className="text-sm text-estacio-blue font-semibold"><i className="bi bi-plus-circle-fill mr-2"></i>Agendar</p>
                                     </div>
-                                ))
-                            ) : (
-                                <div className={`h-full flex items-center ${isPast ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 transition-opacity'}`}>
-                                    {isPast ? (
-                                        <p className="text-sm text-gray-400">Horário indisponível</p>
-                                    ) : (
-                                        <p className="text-sm text-estacio-blue font-semibold"><i className="bi bi-plus-circle-fill mr-2"></i>Agendar neste horário</p>
-                                    )}
-                                </div>
-                            )}
+                                )}
+                            </div>
                         </div>
+                    );
+                })}
+
+                {/* Reservation Blocks */}
+                {dayReservations.map(res => {
+                    const startDate = new Date(res.start_time);
+                    const endDate = new Date(res.end_time);
+
+                    const startMinutes = getMinutesFromMidnight(startDate);
+                    const endMinutes = getMinutesFromMidnight(endDate);
+                    
+                    if (startMinutes >= timelineEndMinutes || endMinutes <= timelineStartMinutes) {
+                        return null; // Don't render if outside timeline
+                    }
+                    
+                    const top = ((Math.max(startMinutes, timelineStartMinutes) - timelineStartMinutes) / 60) * 60; // top in px
+                    const height = Math.max(24, ((Math.min(endMinutes, timelineEndMinutes) - Math.max(startMinutes, timelineStartMinutes)) / 60) * 60); // height in px, min 24px
+
+                    return (
+                        <div
+                            key={res.id}
+                            className="absolute left-20 right-0 mr-2 p-2 rounded-lg bg-blue-100 border border-blue-300 z-10 overflow-hidden group"
+                            style={{ top: `${top}px`, height: `${height}px` }}
+                        >
+                            <div className="text-xs text-blue-900 h-full flex flex-col justify-between">
+                                <div>
+                                    <p className="font-bold truncate">{res.environments?.name}{res.environments?.environment_types?.name ? ` (${res.environments.environment_types.name})` : ''}</p>
+                                    <p className="truncate">{new Date(res.start_time).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})} - {new Date(res.end_time).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</p>
+                                    <p className="text-xs italic truncate">{res.users?.name}</p>
+                                </div>
+                                <div className="absolute top-1 right-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); onEditClick(res); }}
+                                        className="bg-blue-100 text-blue-600 hover:bg-blue-200 h-6 w-6 flex items-center justify-center rounded-full"
+                                        title="Editar reserva"
+                                    >
+                                        <i className="bi bi-pencil-square text-xs"></i>
+                                    </button>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); onDeleteClick(res); }}
+                                        className="bg-red-100 text-red-600 hover:bg-red-200 h-6 w-6 flex items-center justify-center rounded-full"
+                                        title="Cancelar reserva"
+                                    >
+                                        <i className="bi bi-trash text-xs"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+            {dayReservations.length === 0 && (
+                 <div className="absolute inset-0 flex items-center justify-center text-gray-500 z-0 pointer-events-none">
+                    <div className="text-center">
+                        <p>Nenhuma reserva para este dia.</p>
+                        <p>Clique em um horário para agendar.</p>
                     </div>
-                );
-            })}
-             {dayReservations.length === 0 && (
-                <div className="text-center text-gray-500 py-16">
-                    <p>Nenhuma reserva para este dia.</p>
-                    <p>Clique em um horário para agendar.</p>
                 </div>
             )}
         </div>
     );
 };
+
 
 const WeekView: React.FC<{ date: Date; reservations: Reservation[] }> = ({ date, reservations }) => {
     const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -1161,16 +1263,16 @@ const WeekView: React.FC<{ date: Date; reservations: Reservation[] }> = ({ date,
     startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
     
     return (
-        <div className="grid grid-cols-1 md:grid-cols-7 border rounded-lg overflow-hidden max-h-[70vh] md:max-h-none">
+        <div className="grid grid-cols-1 md:grid-cols-7 border rounded-lg overflow-y-auto max-h-[75vh]">
             {Array.from({ length: 7 }).map((_, i) => {
                 const day = new Date(startOfWeek);
                 day.setDate(day.getDate() + i);
                 const dayReservations = reservations.filter(r => areDatesSameDay(new Date(r.start_time), day)).sort((a,b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
 
                 return (
-                    <div key={i} className="border-b md:border-b-0 md:border-r last:border-r-0 p-2">
+                    <div key={i} className="border-b md:border-b-0 md:border-r last:border-r-0 p-2 min-h-24">
                         <div className="font-bold text-center mb-2">{weekdays[i]} <span className="text-gray-500">{day.getDate()}</span></div>
-                        <div className="space-y-2 h-full md:h-96 overflow-y-auto pr-1">
+                        <div className="space-y-2 pr-1">
                              {dayReservations.map(res => (
                                 <div key={res.id} className="bg-blue-50 text-blue-800 p-2 rounded-md text-xs shadow-sm">
                                     <p className="font-bold">{res.environments?.name}</p>
@@ -1577,6 +1679,141 @@ const CreateReservationAdminModal: React.FC<CreateReservationAdminModalProps> = 
           </div>
         </form>
       </div>
+    </Modal>
+  );
+};
+
+interface EditReservationAdminModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  reservation: Reservation;
+  environments: Environment[];
+  allUsers: User[];
+  onSaveSuccess: () => void;
+}
+
+const EditReservationAdminModal: React.FC<EditReservationAdminModalProps> = ({
+  isOpen,
+  onClose,
+  reservation,
+  environments,
+  allUsers,
+  onSaveSuccess,
+}) => {
+  const [formState, setFormState] = useState({
+    userId: '',
+    environmentId: '',
+    date: '',
+    startTime: '',
+    endTime: '',
+  });
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (isOpen && reservation) {
+      const startDate = new Date(reservation.start_time);
+      const endDate = new Date(reservation.end_time);
+
+      setFormState({
+        userId: reservation.user_id || '',
+        environmentId: reservation.environment_id || '',
+        date: startDate.toISOString().split('T')[0],
+        startTime: startDate.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' }),
+        endTime: endDate.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' }),
+      });
+      setError('');
+      setIsSaving(false);
+    }
+  }, [isOpen, reservation]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormState(p => ({ ...p, [name]: value }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    if (!formState.userId || !formState.environmentId || !formState.date || !formState.startTime || !formState.endTime) {
+      setError('Todos os campos são obrigatórios.');
+      return;
+    }
+    
+    const startTime = new Date(`${formState.date}T${formState.startTime}`);
+    const endTime = new Date(`${formState.date}T${formState.endTime}`);
+
+    if (startTime >= endTime) {
+      setError('O horário de término deve ser após o horário de início.');
+      return;
+    }
+
+    const updatedData = {
+      user_id: formState.userId,
+      environment_id: formState.environmentId,
+      start_time: startTime.toISOString(),
+      end_time: endTime.toISOString(),
+    };
+    
+    setIsSaving(true);
+    try {
+      await updateReservation(reservation.id, updatedData);
+      onSaveSuccess();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={`Editar Reserva: ${reservation.environments?.name}`}>
+      <form onSubmit={handleSubmit} className="space-y-4 max-h-[75vh] overflow-y-auto pr-2">
+        <div>
+          <label htmlFor="edit-date" className="block text-sm font-medium text-gray-700 mb-1">Data</label>
+          <input type="date" id="edit-date" name="date" value={formState.date} onChange={handleInputChange} required className="w-full p-2 border border-gray-300 rounded-md shadow-sm" />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="edit-startTime" className="block text-sm font-medium text-gray-700 mb-1">Início</label>
+            <input type="time" id="edit-startTime" name="startTime" value={formState.startTime} onChange={handleInputChange} required className="w-full p-2 border border-gray-300 rounded-md shadow-sm" />
+          </div>
+          <div>
+            <label htmlFor="edit-endTime" className="block text-sm font-medium text-gray-700 mb-1">Fim</label>
+            <input type="time" id="edit-endTime" name="endTime" value={formState.endTime} onChange={handleInputChange} required className="w-full p-2 border border-gray-300 rounded-md shadow-sm" />
+          </div>
+        </div>
+        <div>
+          <label htmlFor="edit-userId" className="block text-sm font-medium text-gray-700 mb-1">Usuário</label>
+          <select id="edit-userId" name="userId" value={formState.userId} onChange={handleInputChange} required className="w-full p-2 border border-gray-300 rounded-md shadow-sm">
+            <option value="">Selecione um usuário...</option>
+            {allUsers.map(user => (
+              <option key={user.id} value={user.id}>{user.name} ({user.role})</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="edit-environmentId" className="block text-sm font-medium text-gray-700 mb-1">Ambiente</label>
+          <select id="edit-environmentId" name="environmentId" value={formState.environmentId} onChange={handleInputChange} required className="w-full p-2 border border-gray-300 rounded-md shadow-sm">
+            <option value="">Selecione um ambiente...</option>
+            {environments.map(env => (
+              <option key={env.id} value={env.id}>
+                {env.name}{env.environment_types?.name ? ` (${env.environment_types.name})` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {error && <p className="text-red-500 text-center text-sm font-semibold bg-red-100 p-2 rounded-md">{error}</p>}
+        
+        <div className="flex justify-end gap-3 pt-4 border-t mt-4">
+          <button type="button" onClick={onClose} disabled={isSaving} className="bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors">Cancelar</button>
+          <button type="submit" disabled={isSaving} className="flex items-center justify-center gap-2 w-48 bg-estacio-blue text-white font-bold py-2 px-4 rounded-lg hover:bg-opacity-90 disabled:opacity-50">
+            {isSaving ? <Spinner /> : "Salvar Alterações"}
+          </button>
+        </div>
+      </form>
     </Modal>
   );
 };
