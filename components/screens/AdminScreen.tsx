@@ -91,7 +91,7 @@ const AdminScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, se
 
   return (
     <div className="container mx-auto p-4 md:p-8">
-      <header className="flex justify-between items-center mb-8">
+      <header className="flex justify-between items-center mb-8 non-printable">
         <h1 className="text-4xl font-bold text-gray-800">Gestão</h1>
         <div className="flex items-center gap-4">
             <div className="text-center">
@@ -109,7 +109,7 @@ const AdminScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, se
 
       {error && <p className="bg-red-100 text-red-700 p-3 rounded-md mb-4 text-center font-semibold">{error}</p>}
 
-      <div className="mb-8">
+      <div className="mb-8 non-printable">
         <nav className="flex justify-around" aria-label="Tabs de Gestão">
           <button
             onClick={() => setView('environments')}
@@ -267,7 +267,7 @@ const LayoutAdminView: React.FC<{ environments: Environment[], allResources: Res
     }, [environments]); // This dependency is simplified; it resets when the base data changes.
 
     return (
-        <div className="bg-white rounded-xl shadow-xl p-6">
+        <div className="bg-white rounded-xl shadow-xl p-6 non-printable">
             <div className="flex items-center gap-3 mb-4">
                 <i className="bi bi-map-fill text-2xl text-estacio-blue"></i>
                 <h2 className="text-2xl font-semibold text-gray-800">Layout dos Ambientes</h2>
@@ -466,7 +466,7 @@ const SimpleCrudView: React.FC<{
     };
 
     return (
-        <div className="bg-white rounded-xl shadow-xl overflow-hidden p-6">
+        <div className="bg-white rounded-xl shadow-xl overflow-hidden p-6 non-printable">
             <div className="flex items-center gap-3 mb-4">
                 <i className={`bi ${icon} text-2xl text-estacio-blue`}></i>
                 <h2 className="text-2xl font-semibold text-gray-800">{title}</h2>
@@ -582,7 +582,7 @@ const UsersAdminView: React.FC<{ users: User[], refreshData: () => Promise<void>
     };
 
     return (
-        <div className="bg-white rounded-xl shadow-xl overflow-hidden p-6">
+        <div className="bg-white rounded-xl shadow-xl overflow-hidden p-6 non-printable">
             <div className="flex justify-between items-center mb-4">
                  <div className="flex items-center gap-3">
                     <i className="bi bi-people-fill text-2xl text-estacio-blue"></i>
@@ -681,7 +681,7 @@ const EnvironmentsAdminView: React.FC<{ environments: Environment[], types: Envi
               resources={resources} 
               refreshData={refreshData} 
             />
-            <div className="bg-white rounded-xl shadow-xl overflow-hidden">
+            <div className="bg-white rounded-xl shadow-xl overflow-hidden non-printable">
                 <div className="flex justify-between items-center p-6 cursor-pointer group" onClick={() => setIsListOpen(!isListOpen)}>
                     <div className="flex items-center gap-4">
                         <i className="bi bi-door-open-fill text-2xl text-estacio-blue"></i>
@@ -800,7 +800,7 @@ const EnvironmentAddForm: React.FC<{ isOpen: boolean, setIsOpen: (b: boolean) =>
     };
     
     return (
-        <div className="bg-white rounded-xl shadow-xl overflow-hidden transition-all duration-300">
+        <div className="bg-white rounded-xl shadow-xl overflow-hidden transition-all duration-300 non-printable">
             <div className="flex justify-between items-center p-6 cursor-pointer group" onClick={() => setIsOpen(!isOpen)}>
                 <div className="flex items-center gap-4"><i className="bi bi-plus-circle-fill text-2xl text-estacio-blue"></i><h2 className="text-2xl font-semibold text-gray-800">Novo Ambiente</h2></div>
                 <i className={`bi bi-chevron-down text-2xl text-gray-500 transform transition-transform ${isOpen ? 'rotate-180' : ''}`}></i>
@@ -997,7 +997,7 @@ const EnvironmentDetailsModal: React.FC<{
 
 // --- Calendar Components ---
 
-type CalendarDisplayMode = 'day' | 'week' | 'month' | 'list' | 'year';
+type CalendarDisplayMode = 'day' | 'week' | 'month' | 'list';
 
 const areDatesSameDay = (d1: Date, d2: Date) =>
   d1.getFullYear() === d2.getFullYear() &&
@@ -1050,7 +1050,6 @@ const CalendarAdminView: React.FC<{ environments: Environment[]; resources: Reso
             const newDate = new Date(prev);
             if (displayMode === 'day') newDate.setDate(prev.getDate() + offset);
             else if (displayMode === 'week') newDate.setDate(prev.getDate() + offset * 7);
-            else if (displayMode === 'year') newDate.setFullYear(prev.getFullYear() + offset);
             else newDate.setMonth(prev.getMonth() + offset);
             return newDate;
         });
@@ -1075,7 +1074,6 @@ const CalendarAdminView: React.FC<{ environments: Environment[]; resources: Reso
             endOfWeek.setDate(startOfWeek.getDate() + 6);
             return `${startOfWeek.toLocaleDateString('pt-BR')} - ${endOfWeek.toLocaleDateString('pt-BR')}`;
         }
-        if (displayMode === 'year') return currentDate.getFullYear().toString();
         return currentDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
     };
 
@@ -1083,7 +1081,6 @@ const CalendarAdminView: React.FC<{ environments: Environment[]; resources: Reso
         { key: 'day', label: 'Dia', icon: 'bi-calendar-day' },
         { key: 'week', label: 'Semana', icon: 'bi-calendar-week' },
         { key: 'month', label: 'Mês', icon: 'bi-calendar-month' },
-        { key: 'year', label: 'Ano', icon: 'bi-calendar', disabled: true },
         { key: 'list', label: 'Agenda', icon: 'bi-list-ul' },
     ];
     
@@ -1091,7 +1088,7 @@ const CalendarAdminView: React.FC<{ environments: Environment[]; resources: Reso
 
     return (
         <div className="bg-white rounded-xl shadow-xl p-4 sm:p-6">
-            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4 non-printable">
                 <div className="flex items-center gap-2">
                     <button onClick={() => handleDateChange(-1)} className="p-2 rounded-full hover:bg-gray-200 transition-colors" aria-label="Período anterior"><i className="bi bi-chevron-left"></i></button>
                     <button onClick={() => setCurrentDate(new Date())} className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg transition-colors text-sm">Hoje</button>
@@ -1112,7 +1109,6 @@ const CalendarAdminView: React.FC<{ environments: Environment[]; resources: Reso
                     {displayMode === 'day' && <DayView date={currentDate} reservations={reservations} onTimeSlotClick={handleTimeSlotClick} onDeleteClick={setReservationToDelete} onEditClick={setReservationToEdit} />}
                     {displayMode === 'week' && <WeekView date={currentDate} reservations={reservations} />}
                     {displayMode === 'month' && <MonthView date={currentDate} reservations={reservations} onDateClick={(d) => { setDisplayMode('day'); setCurrentDate(d); }} />}
-                    {displayMode === 'year' && <div className="text-center p-16 text-gray-500">Visualização "Ano" ainda não implementada.</div>}
                     {displayMode === 'list' && <ListView reservations={reservations} />}
                 </div>
             )}
@@ -1275,7 +1271,7 @@ const WeekView: React.FC<{ date: Date; reservations: Reservation[] }> = ({ date,
                         <div className="space-y-2 pr-1">
                              {dayReservations.map(res => (
                                 <div key={res.id} className="bg-blue-50 text-blue-800 p-2 rounded-md text-xs shadow-sm">
-                                    <p className="font-bold">{res.environments?.name}</p>
+                                    <p className="font-bold truncate">{res.environments?.name}{res.environments?.environment_types?.name ? ` (${res.environments.environment_types.name})` : ''}</p>
                                     <p>{new Date(res.start_time).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})} - {new Date(res.end_time).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</p>
                                     <p className="text-xs font-semibold italic">{res.users?.name}</p>
                                 </div>
@@ -1308,10 +1304,10 @@ const MonthView: React.FC<{ date: Date; reservations: Reservation[]; onDateClick
 
     return (
         <>
-            <div className="grid grid-cols-7 gap-1 text-center font-semibold text-gray-600 mb-2">
+            <div className="grid grid-cols-7 gap-1 text-center font-semibold text-gray-600 mb-2 non-printable">
                 {weekdays.map(day => <div key={day}>{day}</div>)}
             </div>
-            <div className="grid grid-cols-7 gap-1">
+            <div className="grid grid-cols-7 gap-1 non-printable">
                 {Array(firstDayOfMonth).fill(null).map((_, i) => <div key={`empty-${i}`}></div>)}
                 {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
                     const dayDate = new Date(year, month, day);
@@ -1356,19 +1352,86 @@ const MonthView: React.FC<{ date: Date; reservations: Reservation[]; onDateClick
 };
 
 const ListView: React.FC<{ reservations: Reservation[] }> = ({ reservations }) => {
-    const sortedReservations = [...reservations].sort((a,b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
-    
+    const sortedReservations = [...reservations].sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+
     return (
-         <div className="border rounded-lg max-h-[60vh] overflow-y-auto">
-            <ul className="divide-y">
-                {sortedReservations.length > 0 ? sortedReservations.map(res => (
-                     <li key={res.id} className="p-3 hover:bg-gray-50">
-                        <p className="font-bold text-gray-800">{res.environments?.name}</p>
-                        <p className="text-sm text-gray-600">{new Date(res.start_time).toLocaleString('pt-BR', { dateStyle: 'full', timeStyle: 'short' })}</p>
-                        <p className="text-sm text-gray-500 italic">Reservado por: {res.users?.name}</p>
-                    </li>
-                )) : <p className="text-center text-gray-500 py-16">Nenhuma reserva neste mês.</p>}
-            </ul>
+        <div className="printable-agenda">
+            <div className="flex justify-end mb-4 non-printable">
+                <button
+                    onClick={() => window.print()}
+                    className="flex items-center gap-2 bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors"
+                >
+                    <i className="bi bi-printer-fill"></i>
+                    <span>Imprimir Agenda</span>
+                </button>
+            </div>
+            
+            <div className="print-header hidden">
+                <h2 className="text-2xl font-bold text-center mb-2">Relatório de Agenda</h2>
+                <p className="text-center text-gray-600">Gerado em: {new Date().toLocaleString('pt-BR')}</p>
+            </div>
+
+            <div className="border rounded-lg max-h-[60vh] overflow-y-auto non-printable-scroll">
+                <ul className="divide-y divide-gray-200">
+                    {sortedReservations.length > 0 ? (
+                        sortedReservations.map(res => (
+                            <li key={res.id} className="p-4 hover:bg-gray-50 break-inside-avoid">
+                                <p className="font-bold text-lg text-gray-800">{res.environments?.name}{res.environments?.environment_types?.name ? ` (${res.environments.environment_types.name})` : ''}</p>
+                                <div className="mt-1">
+                                    <p className="text-sm text-gray-600">
+                                        <i className="bi bi-calendar-event mr-2"></i>
+                                        <span className="font-semibold">{new Date(res.start_time).toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+                                    </p>
+                                    <p className="text-sm text-gray-600">
+                                        <i className="bi bi-clock mr-2"></i>
+                                        Das <span className="font-semibold">{new Date(res.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span> às <span className="font-semibold">{new Date(res.end_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                                    </p>
+                                    <p className="text-sm text-gray-500 italic mt-1">
+                                        <i className="bi bi-person mr-2"></i>
+                                        Reservado por: {res.users?.name}
+                                    </p>
+                                </div>
+                            </li>
+                        ))
+                    ) : (
+                        <p className="text-center text-gray-500 py-16">Nenhuma reserva neste mês.</p>
+                    )}
+                </ul>
+            </div>
+            
+            <style>{`
+                @media print {
+                    body > #root > div {
+                        visibility: hidden;
+                    }
+                    .printable-agenda {
+                        visibility: visible !important;
+                        position: absolute;
+                        left: 0;
+                        top: 0;
+                        width: 100%;
+                        padding: 1rem;
+                    }
+                    .printable-agenda * {
+                        visibility: visible !important;
+                    }
+                    .non-printable {
+                        display: none !important;
+                    }
+                    .non-printable-scroll {
+                        max-height: none !important;
+                        overflow-y: visible !important;
+                        border: none !important;
+                        box-shadow: none !important;
+                    }
+                    .print-header {
+                        display: block !important;
+                    }
+                    li {
+                        page-break-inside: avoid;
+                    }
+                }
+            `}</style>
         </div>
     );
 };
@@ -1897,7 +1960,7 @@ const BackupRestoreView: React.FC<{ refreshData: () => Promise<void> }> = ({ ref
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 non-printable">
         {success && <p className="bg-green-100 text-green-700 p-3 rounded-md text-center font-semibold">{success}</p>}
         {error && <p className="bg-red-100 text-red-700 p-3 rounded-md text-center font-semibold">{error}</p>}
       
