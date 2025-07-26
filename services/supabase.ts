@@ -11,25 +11,32 @@ export type Database = {
         Row: {
           created_at: string
           id: string
-          location: string | null
+          location: string
           name: string
           type_id: string
         }
         Insert: {
           created_at?: string
           id?: string
-          location?: string | null
+          location?: string
           name: string
           type_id: string
         }
         Update: {
           created_at?: string
           id?: string
-          location?: string | null
+          location?: string
           name?: string
           type_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "environments_type_id_fkey"
+            columns: ["type_id"]
+            referencedRelation: "environment_types"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       environment_resources: {
         Row: {
@@ -44,7 +51,20 @@ export type Database = {
           environment_id?: string
           resource_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "environment_resources_environment_id_fkey"
+            columns: ["environment_id"]
+            referencedRelation: "environments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "environment_resources_resource_id_fkey"
+            columns: ["resource_id"]
+            referencedRelation: "resources"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       environment_types: {
         Row: {
@@ -92,7 +112,20 @@ export type Database = {
           status?: "approved" | "pending" | "cancelled"
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "reservations_environment_id_fkey"
+            columns: ["environment_id"]
+            referencedRelation: "environments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservations_user_id_fkey"
+            columns: ["user_id"]
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       resources: {
         Row: {
@@ -200,10 +233,9 @@ export async function loginUser(email: string, password_plaintext: string): Prom
         return null;
     }
 
-    const userData = data as any;
     // Se o usuário existir, verifique a senha
-    if (userData.password === password_plaintext) {
-        const { password, ...userWithoutPassword } = userData;
+    if (data.password === password_plaintext) {
+        const { password, ...userWithoutPassword } = data;
         return userWithoutPassword as User;
     }
 
@@ -214,7 +246,7 @@ export async function loginUser(email: string, password_plaintext: string): Prom
 export async function getAllUsers(): Promise<User[]> {
     const { data, error } = await supabase.from('users').select('id, name, email, role, created_at').order('name');
     if (error) throw new Error('Falha ao buscar usuários: ' + error.message);
-    return (data as unknown as User[]) || [];
+    return (data as User[]) || [];
 }
 
 export async function updateUser(
@@ -232,14 +264,14 @@ export async function updateUser(
         throw new Error('Usuário não encontrado.');
     }
 
-    if ((currentUser as any).password !== currentPasswordForVerification) {
+    if (currentUser.password !== currentPasswordForVerification) {
         throw new Error('A senha atual está incorreta.');
     }
     
-    const payload = updateData;
+    const payload: Partial<Database['public']['Tables']['users']['Update']> = updateData;
     const { data, error } = await supabase
         .from('users')
-        .update(payload as any)
+        .update(payload)
         .eq('id', userId)
         .select('id, created_at, name, email, role')
         .single();
@@ -254,14 +286,14 @@ export async function updateUser(
     if (!data) {
         throw new Error('Usuário não encontrado após a atualização.');
     }
-    return data as unknown as User;
+    return data as User;
 }
 
 export async function updateUserByAdmin(
   userId: string,
   updateData: { name?: string; email?: string; role?: UserRole; password?: string }
 ): Promise<User> {
-  const dataToUpdate: any = { ...updateData };
+  const dataToUpdate: Partial<Database['public']['Tables']['users']['Update']> = { ...updateData };
   if (!dataToUpdate.password) {
     delete dataToUpdate.password;
   }
@@ -282,7 +314,7 @@ export async function updateUserByAdmin(
   if (!data) {
       throw new Error('Usuário não encontrado após a atualização.');
   }
-  return data as unknown as User;
+  return data as User;
 }
 
 export async function createUserByAdmin(
@@ -291,7 +323,7 @@ export async function createUserByAdmin(
   const payload: Database['public']['Tables']['users']['Insert'] = userData;
   const { data, error } = await supabase
     .from('users')
-    .insert(payload as any)
+    .insert(payload)
     .select('id, created_at, name, email, role')
     .single();
 
@@ -304,7 +336,7 @@ export async function createUserByAdmin(
   if (!data) {
       throw new Error('Usuário não pôde ser criado.');
   }
-  return data as unknown as User;
+  return data as User;
 }
 
 export async function deleteUserByAdmin(userId: string): Promise<void> {
@@ -328,20 +360,22 @@ export async function getAllEnvironments(): Promise<Environment[]> {
     if (error) throw new Error('Falha ao buscar ambientes: ' + error.message);
     if (!data) return [];
     
-    // Com os tipos corretos, o uso de 'any' pode ser evitado.
-    return data.map((env: any) => {
+    // Mapeamento seguro sem 'any', assumindo a estrutura da query complexa
+    return data.map(env => {
         const { environment_resources, ...rest } = env;
-        const resources = environment_resources.map((er: any) => er.resources).filter(Boolean) as Resource[];
-        return { ...rest, resources };
+        const resources = (environment_resources || [])
+            .map((er) => er.resources)
+            .filter((r): r is NonNullable<typeof r> => !!r);
+        return { ...rest, resources: resources as Resource[] };
     }) as Environment[];
 }
 
 export async function addEnvironment(
-  envData: { name: string; location?: string | null; type_id: string },
+  envData: { name: string; location?: string; type_id: string },
   resourceIds: string[]
 ): Promise<Environment> {
     const payload: Database['public']['Tables']['environments']['Insert'] = envData;
-    const { data, error } = await supabase.from('environments').insert(payload as any).select().single();
+    const { data, error } = await supabase.from('environments').insert(payload).select().single();
     if (error) {
        if (error.message.includes('unique constraint')) {
            throw new Error('Já existe um ambiente com este nome.');
@@ -350,14 +384,14 @@ export async function addEnvironment(
     }
     if (!data) throw new Error('Não foi possível adicionar o ambiente.');
 
-    const newEnvironment = data as any;
+    const newEnvironment = data;
 
     if (resourceIds.length > 0) {
         const environmentResources: Database['public']['Tables']['environment_resources']['Insert'][] = resourceIds.map(resource_id => ({
             environment_id: newEnvironment.id,
             resource_id: resource_id
         }));
-        const { error: resourcesError } = await supabase.from('environment_resources').insert(environmentResources as any);
+        const { error: resourcesError } = await supabase.from('environment_resources').insert(environmentResources);
         if (resourcesError) {
             // Tenta limpar o ambiente criado em caso de erro nos recursos
             await supabase.from('environments').delete().eq('id', newEnvironment.id);
@@ -370,52 +404,75 @@ export async function addEnvironment(
     if (newError) throw new Error('Falha ao buscar o ambiente recém-criado: ' + newError.message);
     if (!newData) throw new Error('Ambiente recém-criado não encontrado.');
     
-    const { environment_resources, ...rest } = newData as any;
-    const resources = environment_resources.map((er: any) => er.resources).filter(Boolean) as Resource[];
-    return { ...rest, resources } as Environment;
+    const { environment_resources, ...rest } = newData;
+    const resources = (environment_resources || []).map((er) => er.resources).filter((r): r is NonNullable<typeof r> => !!r);
+    return { ...rest, resources: resources as Resource[] } as Environment;
 }
 
 export async function updateEnvironment(
-  id: string, 
-  envData: { name?: string; location?: string | null; type_id?: string },
-  resourceIds: string[]
+  id: string,
+  envData: { name?: string; location?: string; type_id?: string },
+  newResourceIds: string[]
 ): Promise<Environment> {
+    // 1. Atualizar os dados do ambiente
     const payload: Database['public']['Tables']['environments']['Update'] = envData;
-    const { data, error } = await supabase
+    const { data: updatedEnv, error: updateError } = await supabase
         .from('environments')
-        .update(payload as any)
+        .update(payload)
         .eq('id', id)
         .select()
         .single();
-    if (error) {
-       if (error.message.includes('unique constraint')) {
-           throw new Error('Já existe um ambiente com este nome.');
-       }
-       throw new Error('Falha ao atualizar o ambiente: ' + error.message);
+
+    if (updateError) {
+        if (updateError.message.includes('unique constraint')) {
+            throw new Error('Já existe um ambiente com este nome.');
+        }
+        throw new Error('Falha ao atualizar o ambiente: ' + updateError.message);
     }
-    if (!data) throw new Error('Não foi possível encontrar o ambiente para atualizar.');
+    if (!updatedEnv) throw new Error('Não foi possível encontrar o ambiente para atualizar.');
 
-    // Atualiza os recursos: remove todos e adiciona os novos
-    const { error: deleteError } = await supabase.from('environment_resources').delete().eq('environment_id', id);
-    if(deleteError) throw new Error('Falha ao atualizar recursos (remoção): ' + deleteError.message);
+    // 2. Gerenciar recursos de forma mais segura (diff)
+    const { data: currentEnvResources, error: fetchError } = await supabase
+        .from('environment_resources')
+        .select('resource_id')
+        .eq('environment_id', id);
+    if (fetchError) throw new Error('Falha ao buscar recursos atuais: ' + fetchError.message);
 
-    if(resourceIds.length > 0) {
-        const environmentResources: Database['public']['Tables']['environment_resources']['Insert'][] = resourceIds.map(resource_id => ({
+    const currentResourceIds = (currentEnvResources || []).map(r => r.resource_id);
+    const resourcesToRemove = currentResourceIds.filter(resId => !newResourceIds.includes(resId));
+    const resourcesToAdd = newResourceIds.filter(resId => !currentResourceIds.includes(resId));
+
+    if (resourcesToRemove.length > 0) {
+        const { error: deleteError } = await supabase
+            .from('environment_resources')
+            .delete()
+            .eq('environment_id', id)
+            .in('resource_id', resourcesToRemove);
+        if (deleteError) throw new Error('Falha ao remover recursos antigos: ' + deleteError.message);
+    }
+
+    if (resourcesToAdd.length > 0) {
+        const newLinks: Database['public']['Tables']['environment_resources']['Insert'][] = resourcesToAdd.map(resource_id => ({
             environment_id: id,
-            resource_id: resource_id
+            resource_id: resource_id,
         }));
-        const { error: insertError } = await supabase.from('environment_resources').insert(environmentResources as any);
-        if (insertError) throw new Error('Falha ao atualizar recursos (inserção): ' + insertError.message);
+        const { error: insertError } = await supabase.from('environment_resources').insert(newLinks);
+        if (insertError) throw new Error('Falha ao adicionar novos recursos: ' + insertError.message);
     }
-    
-    // Busca novamente para retornar com os dados completos
-    const { data: newData, error: newError } = await supabase.from('environments').select('*, environment_types(name), environment_resources(resources!inner(*))').eq('id', id).single();
-    if (newError) throw new Error('Falha ao buscar o ambiente atualizado: ' + newError.message);
-    if (!newData) throw new Error('Ambiente atualizado não encontrado.');
 
-    const { environment_resources, ...rest } = newData as any;
-    const resources = environment_resources.map((er: any) => er.resources).filter(Boolean) as Resource[];
-    return { ...rest, resources } as Environment;
+    // 3. Buscar novamente para retornar com os dados completos e atualizados
+    const { data: finalData, error: finalError } = await supabase
+        .from('environments')
+        .select('*, environment_types(name), environment_resources(resources!inner(*))')
+        .eq('id', id)
+        .single();
+
+    if (finalError) throw new Error('Falha ao buscar o ambiente atualizado: ' + finalError.message);
+    if (!finalData) throw new Error('Ambiente atualizado não encontrado.');
+
+    const { environment_resources, ...rest } = finalData;
+    const resources = (environment_resources || []).map((er) => er.resources).filter((r): r is NonNullable<typeof r> => !!r);
+    return { ...rest, resources: resources as Resource[] } as Environment;
 }
 
 export async function deleteEnvironment(id: string): Promise<void> {
@@ -433,21 +490,21 @@ export async function deleteEnvironment(id: string): Promise<void> {
 export async function getAllEnvironmentTypes(): Promise<EnvironmentType[]> {
     const { data, error } = await supabase.from('environment_types').select('*').order('name');
     if (error) throw new Error('Falha ao buscar tipos de ambiente: ' + error.message);
-    return (data as unknown as EnvironmentType[]) || [];
+    return (data as EnvironmentType[]) || [];
 }
 export async function addEnvironmentType(name: string): Promise<EnvironmentType> {
     const payload: Database['public']['Tables']['environment_types']['Insert'] = { name };
-    const { data, error } = await supabase.from('environment_types').insert(payload as any).select().single();
+    const { data, error } = await supabase.from('environment_types').insert(payload).select().single();
     if (error) throw new Error('Falha ao adicionar tipo: ' + error.message);
     if (!data) throw new Error('Não foi possível criar o tipo.');
-    return data as unknown as EnvironmentType;
+    return data as EnvironmentType;
 }
 export async function updateEnvironmentType(id: string, name: string): Promise<EnvironmentType> {
     const payload: Database['public']['Tables']['environment_types']['Update'] = { name };
-    const { data, error } = await supabase.from('environment_types').update(payload as any).eq('id', id).select().single();
+    const { data, error } = await supabase.from('environment_types').update(payload).eq('id', id).select().single();
     if (error) throw new Error('Falha ao atualizar tipo: ' + error.message);
     if (!data) throw new Error('Tipo não encontrado para atualizar.');
-    return data as unknown as EnvironmentType;
+    return data as EnvironmentType;
 }
 export async function deleteEnvironmentType(id: string): Promise<void> {
     const { error } = await supabase.from('environment_types').delete().eq('id', id);
@@ -463,21 +520,21 @@ export async function deleteEnvironmentType(id: string): Promise<void> {
 export async function getAllResources(): Promise<Resource[]> {
     const { data, error } = await supabase.from('resources').select('*').order('name');
     if (error) throw new Error('Falha ao buscar recursos: ' + error.message);
-    return (data as unknown as Resource[]) || [];
+    return (data as Resource[]) || [];
 }
 export async function addResource(name: string): Promise<Resource> {
     const payload: Database['public']['Tables']['resources']['Insert'] = { name };
-    const { data, error } = await supabase.from('resources').insert(payload as any).select().single();
+    const { data, error } = await supabase.from('resources').insert(payload).select().single();
     if (error) throw new Error('Falha ao adicionar recurso: ' + error.message);
     if (!data) throw new Error('Não foi possível criar o recurso.');
-    return data as unknown as Resource;
+    return data as Resource;
 }
 export async function updateResource(id: string, name: string): Promise<Resource> {
     const payload: Database['public']['Tables']['resources']['Update'] = { name };
-    const { data, error } = await supabase.from('resources').update(payload as any).eq('id', id).select().single();
+    const { data, error } = await supabase.from('resources').update(payload).eq('id', id).select().single();
     if (error) throw new Error('Falha ao atualizar recurso: ' + error.message);
     if (!data) throw new Error('Recurso não encontrado para atualizar.');
-    return data as unknown as Resource;
+    return data as Resource;
 }
 export async function deleteResource(id: string): Promise<void> {
     const { error } = await supabase.from('resources').delete().eq('id', id);
@@ -499,7 +556,7 @@ export async function getReservationsForEnvironment(environmentId: string): Prom
         .order('start_time');
     
     if (error) throw new Error('Falha ao buscar a agenda do ambiente: ' + error.message);
-    return (data as unknown as Reservation[]) || [];
+    return (data as Reservation[]) || [];
 }
 
 export async function getReservationsForMonth(year: number, month: number): Promise<Reservation[]> {
@@ -514,7 +571,7 @@ export async function getReservationsForMonth(year: number, month: number): Prom
         .order('start_time');
 
     if (error) throw new Error('Falha ao buscar reservas para o mês: ' + error.message);
-    return (data as unknown as Reservation[]) || [];
+    return (data as Reservation[]) || [];
 }
 
 
@@ -526,7 +583,7 @@ export async function getUserReservations(userId: string): Promise<Reservation[]
         .order('start_time');
     
     if (error) throw new Error('Falha ao buscar suas reservas: ' + error.message);
-    return (data as unknown as Reservation[]) || [];
+    return (data as Reservation[]) || [];
 }
 
 export async function createReservations(reservationsData: { environment_id: string; user_id: string; start_time: string; end_time: string; }[]): Promise<any[]> {
@@ -555,7 +612,7 @@ export async function createReservations(reservationsData: { environment_id: str
     
     // Etapa 2: Lidar com conflitos encontrados e fornecer uma mensagem clara
     if (conflictingReservations && conflictingReservations.length > 0) {
-        const firstConflict: any = conflictingReservations[0];
+        const firstConflict = conflictingReservations[0];
         const conflictDetails = `Conflito de horário! O ambiente "${firstConflict.environments?.name || 'desconhecido'}" já está reservado por "${firstConflict.users?.name || 'desconhecido'}" de ${new Date(firstConflict.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} às ${new Date(firstConflict.end_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} no mesmo dia.`;
         throw new Error(conflictDetails);
     }
@@ -565,7 +622,7 @@ export async function createReservations(reservationsData: { environment_id: str
     
     const { data, error } = await supabase
         .from('reservations')
-        .insert(dataToInsert as any)
+        .insert(dataToInsert)
         .select();
     
     if (error) {
@@ -608,7 +665,7 @@ export async function updateReservation(
     throw new Error('Reserva original não encontrada para verificação de conflitos.');
   }
 
-  const currentRes = currentReservation as any;
+  const currentRes = currentReservation;
   
   const finalEnvId = environment_id || currentRes.environment_id;
   const finalStartTime = start_time || currentRes.start_time;
@@ -633,7 +690,7 @@ export async function updateReservation(
   }
 
   if (conflictingReservations && conflictingReservations.length > 0) {
-    const conflictDetails = `Conflito de horário! O ambiente "${(conflictingReservations[0] as any).environments?.name || 'desconhecido'}" já possui uma reserva que se sobrepõe a este horário.`;
+    const conflictDetails = `Conflito de horário! O ambiente "${conflictingReservations[0].environments?.name || 'desconhecido'}" já possui uma reserva que se sobrepõe a este horário.`;
     throw new Error(conflictDetails);
   }
 
@@ -646,7 +703,7 @@ export async function updateReservation(
 
   const { data, error } = await supabase
     .from('reservations')
-    .update(payload as any)
+    .update(payload)
     .eq('id', reservationId)
     .select(`*, users (name, email), environments(*, environment_types(name))`)
     .single();
@@ -666,7 +723,7 @@ export async function updateReservation(
     throw new Error('Não foi possível encontrar a reserva após a atualização.');
   }
 
-  return data as unknown as Reservation;
+  return data as Reservation;
 }
 
 // --- Serviços de Backup e Restauração ---

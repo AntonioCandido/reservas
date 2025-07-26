@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Page, UserRole } from './constants';
 import type { User } from './types';
@@ -6,7 +7,7 @@ import { testDatabaseConnection } from './services/supabase.ts';
 import Spinner from './components/common/Spinner';
 import LoginScreen from './components/screens/LoginScreen';
 import AdminScreen from './components/screens/AdminScreen';
-import MainScreen from './components/screens/StudentScreen';
+import StudentScreen from './components/screens/StudentScreen';
 import DbErrorScreen from './components/screens/DbErrorScreen';
 
 const App: React.FC = () => {
@@ -47,7 +48,7 @@ const App: React.FC = () => {
         
       case Page.Main:
          if (user) {
-          return <MainScreen setPage={setPage} user={user} setUser={setUser} />;
+          return <StudentScreen setPage={setPage} user={user} setUser={setUser} />;
         }
         // Fallback para login se não houver usuário
         return <LoginScreen setPage={setPage} setUser={setUser} />;

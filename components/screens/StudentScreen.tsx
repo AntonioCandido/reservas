@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getAllEnvironments, createReservations, getReservationsForEnvironment, getUserReservations, cancelReservation, getReservationsForMonth, getAllResources, updateReservation } from '../../services/supabase.ts';
 import type { AppContextType, Environment, Reservation, User, Resource } from '../../types';
@@ -8,9 +9,9 @@ import ConfirmationModal from '../common/ConfirmationModal';
 import ProfileModal from '../common/ProfileModal';
 import AIAssistantModal from '../common/AIAssistantModal.tsx';
 
-type MainView = 'all' | 'my' | 'calendar';
+type StudentView = 'all' | 'my' | 'calendar';
 
-const MainScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, setUser }) => {
+const StudentScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, setUser }) => {
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [resources, setResources] = useState<Resource[]>([]);
   const [myReservations, setMyReservations] = useState<Reservation[]>([]);
@@ -18,7 +19,7 @@ const MainScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, set
   const [error, setError] = useState('');
   
   const canManageReservations = user?.role === UserRole.Professor || user?.role === UserRole.Coordenador;
-  const [view, setView] = useState<MainView>(canManageReservations ? 'calendar' : 'all');
+  const [view, setView] = useState<StudentView>(canManageReservations ? 'calendar' : 'all');
   
   const [selectedEnvironment, setSelectedEnvironment] = useState<Environment | null>(null);
   const [reservationToDelete, setReservationToDelete] = useState<Reservation | null>(null);
@@ -82,7 +83,7 @@ const MainScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, set
   const renderContent = () => {
     switch(view) {
         case 'all':
-            return <AllEnvironmentsView environments={environments} canManageReservations={canManageReservations} onReserveClick={setSelectedEnvironment} isContentOpen={isContentOpen} setIsContentOpen={setIsContentOpen}/>;
+            return <AllEnvironmentsView environments={environments} allResources={resources} canManageReservations={canManageReservations} onReserveClick={setSelectedEnvironment} isContentOpen={isContentOpen} setIsContentOpen={setIsContentOpen}/>;
         case 'my':
             return <MyReservationsView reservations={myReservations} canManageReservations={canManageReservations} onCancelClick={setReservationToDelete} isContentOpen={isContentOpen} setIsContentOpen={setIsContentOpen} />;
         case 'calendar':
@@ -186,62 +187,133 @@ const MainScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, set
 };
 
 // --- View Components ---
-const AllEnvironmentsView: React.FC<{environments: Environment[], canManageReservations: boolean, onReserveClick: (env: Environment) => void, isContentOpen: boolean, setIsContentOpen: (open: boolean) => void}> = 
-({environments, canManageReservations, onReserveClick, isContentOpen, setIsContentOpen}) => {
-    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+const AllEnvironmentsView: React.FC<{
+  environments: Environment[];
+  allResources: Resource[];
+  canManageReservations: boolean;
+  onReserveClick: (env: Environment) => void;
+  isContentOpen: boolean;
+  setIsContentOpen: (open: boolean) => void;
+}> = ({
+  environments,
+  allResources,
+  canManageReservations,
+  onReserveClick,
+  isContentOpen,
+  setIsContentOpen,
+}) => {
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [selectedResources, setSelectedResources] = useState<string[]>([]);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
 
-    const sortedEnvironments = useMemo(() => {
-        return [...environments].sort((a, b) => {
-            if (sortOrder === 'asc') {
-                return a.name.localeCompare(b.name, 'pt-BR');
-            } else {
-                return b.name.localeCompare(a.name, 'pt-BR');
-            }
-        });
-    }, [environments, sortOrder]);
+  const sortedEnvironments = useMemo(() => {
+    return [...environments].sort((a, b) => {
+      if (sortOrder === 'asc') {
+        return a.name.localeCompare(b.name, 'pt-BR');
+      } else {
+        return b.name.localeCompare(a.name, 'pt-BR');
+      }
+    });
+  }, [environments, sortOrder]);
+  
+  const handleResourceToggle = (resourceId: string) => {
+    setSelectedResources(prev =>
+        prev.includes(resourceId)
+            ? prev.filter(id => id !== resourceId)
+            : [...prev, resourceId]
+    );
+  };
 
-    return (
-        <div className="bg-white rounded-xl shadow-xl overflow-hidden non-printable">
-            <div className="flex justify-between items-center p-6 cursor-pointer group" onClick={() => setIsContentOpen(!isContentOpen)}>
-                 <div className="flex items-center gap-3">
-                    <h2 className="text-2xl font-semibold text-gray-700">Todos os Ambientes</h2>
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
-                        }}
-                        className="p-1 rounded-full text-gray-500 hover:bg-gray-200 hover:text-estacio-blue transition-colors"
-                        title={sortOrder === 'asc' ? "Ordenar Z-A" : "Ordenar A-Z"}
-                        aria-label="Ordenar ambientes por nome"
-                    >
-                        <i className={`bi ${sortOrder === 'asc' ? 'bi-sort-alpha-down' : 'bi-sort-alpha-up-alt'} text-xl`}></i>
-                    </button>
+  const filteredEnvironments = useMemo(() => {
+    if (selectedResources.length === 0) return sortedEnvironments;
+    return sortedEnvironments.filter(env =>
+        selectedResources.every(resId =>
+            env.resources.some(envRes => envRes.id === resId)
+        )
+    );
+  }, [sortedEnvironments, selectedResources]);
+
+
+  return (
+    <div className="bg-white rounded-xl shadow-xl overflow-hidden non-printable">
+      <div className="flex justify-between items-center p-6 cursor-pointer group" onClick={() => setIsContentOpen(!isContentOpen)}>
+        <div className="flex items-center gap-3">
+          <h2 className="text-2xl font-semibold text-gray-700">Todos os Ambientes</h2>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
+            }}
+            className="p-1 rounded-full text-gray-500 hover:bg-gray-200 hover:text-estacio-blue transition-colors"
+            title={sortOrder === 'asc' ? 'Ordenar Z-A' : 'Ordenar A-Z'}
+            aria-label="Ordenar ambientes por nome"
+          >
+            <i className={`bi ${sortOrder === 'asc' ? 'bi-sort-alpha-down' : 'bi-sort-alpha-up-alt'} text-xl`}></i>
+          </button>
+        </div>
+        <i className={`bi bi-chevron-down text-2xl text-gray-500 transform transition-transform duration-300 group-hover:text-estacio-blue ${isContentOpen ? 'rotate-180' : ''}`}></i>
+      </div>
+      <div className={`grid transition-[grid-template-rows] duration-500 ease-in-out ${isContentOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+        <div className="overflow-hidden">
+          <div className="px-6 pb-6 border-t border-gray-200">
+          
+            <div className="bg-gray-50 rounded-lg border my-6">
+                <div className="flex justify-between items-center p-4 cursor-pointer group" onClick={() => setIsFilterOpen(!isFilterOpen)} role="button" aria-expanded={isFilterOpen}>
+                    <div className="flex items-center gap-3">
+                         <i className="bi bi-filter-circle-fill text-xl text-estacio-blue"></i>
+                        <h3 className="font-semibold text-gray-800">Filtrar por Recursos</h3>
+                        {selectedResources.length > 0 && ( <span className="bg-estacio-blue text-white text-xs font-bold h-5 w-5 rounded-full flex items-center justify-center">{selectedResources.length}</span>)}
+                    </div>
+                    <i className={`bi bi-chevron-down text-2xl text-gray-500 transform transition-transform duration-300 group-hover:text-estacio-blue ${isFilterOpen ? 'rotate-180' : ''}`}></i>
                 </div>
-                 <i className={`bi bi-chevron-down text-2xl text-gray-500 transform transition-transform duration-300 group-hover:text-estacio-blue ${isContentOpen ? 'rotate-180' : ''}`}></i>
-            </div>
-            <div className={`grid transition-[grid-template-rows] duration-500 ease-in-out ${isContentOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
-                <div className="overflow-hidden">
-                    <div className="px-6 pb-6 border-t border-gray-200">
-                        <div className="space-y-4 pt-6">
-                            {sortedEnvironments.map(env => (
-                                <div key={env.id} className="bg-gray-50 p-4 rounded-lg flex flex-col md:flex-row justify-between md:items-center gap-4 hover:shadow-md transition-shadow">
-                                    <div>
-                                        <h3 className="text-xl font-bold text-estacio-blue">{env.name} <span className="text-base font-normal text-gray-600">- {env.environment_types?.name}</span></h3>
-                                        <p className="text-sm text-gray-500">{env.location}</p>
-                                        <p className="text-sm text-gray-500">Recursos: {env.resources?.map(r => r.name).join(', ') || 'N/A'}</p>
-                                    </div>
-                                    <button onClick={() => onReserveClick(env)} className="bg-estacio-red text-white font-bold py-2 px-4 rounded-lg hover:bg-opacity-90 transition-transform transform hover:scale-105 self-end md:self-center">
-                                        <i className="bi bi-calendar-plus mr-2"></i> {canManageReservations ? 'Reservar' : 'Ver Agenda'}
-                                    </button>
+
+                <div className={`grid transition-all duration-500 ease-in-out ${isFilterOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                    <div className="overflow-hidden">
+                        <div className="p-4 border-t border-gray-200">
+                             {allResources.length > 0 ? (
+                                <div className="flex flex-wrap gap-2 items-center">
+                                    {allResources.map(resource => (
+                                        <button key={resource.id} type="button" onClick={() => handleResourceToggle(resource.id)} className={`px-3 py-1 text-sm font-semibold rounded-full transition-colors ${selectedResources.includes(resource.id) ? 'bg-estacio-blue text-white shadow' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
+                                            {resource.name}
+                                        </button>
+                                    ))}
+                                    {selectedResources.length > 0 && ( <button onClick={() => setSelectedResources([])} className="text-sm text-estacio-red hover:underline ml-auto font-semibold" title="Limpar filtros">Limpar Filtros</button>)}
                                 </div>
-                            ))}
+                            ) : <p className="text-sm text-gray-500">Nenhum recurso cadastrado para filtrar.</p>}
                         </div>
                     </div>
                 </div>
             </div>
+
+            <div className="space-y-4">
+              {filteredEnvironments.length > 0 ? (
+                filteredEnvironments.map(env => (
+                  <div key={env.id} className="bg-gray-50 p-4 rounded-lg flex flex-col md:flex-row justify-between md:items-center gap-4 hover:shadow-md transition-shadow">
+                    <div>
+                      <h3 className="text-xl font-bold text-estacio-blue">{env.name} <span className="text-base font-normal text-gray-600">- {env.environment_types?.name}</span></h3>
+                      <p className="text-sm text-gray-500">{env.location}</p>
+                      <p className="text-sm text-gray-500">Recursos: {env.resources?.map(r => r.name).join(', ') || 'N/A'}</p>
+                    </div>
+                    <button onClick={() => onReserveClick(env)} className="bg-estacio-red text-white font-bold py-2 px-4 rounded-lg hover:bg-opacity-90 transition-transform transform hover:scale-105 self-end md:self-center">
+                      <i className="bi bi-calendar-plus mr-2"></i> {canManageReservations ? 'Reservar' : 'Ver Agenda'}
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center text-gray-500 py-16">
+                    <i className="bi bi-search text-4xl mb-3"></i>
+                    <p className="font-semibold">Nenhum ambiente encontrado.</p>
+                    <p className="text-sm">Tente ajustar seus filtros ou contate um administrador.</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-    );
+      </div>
+    </div>
+  );
 };
+
 
 const MyReservationsView: React.FC<{reservations: Reservation[], canManageReservations: boolean, onCancelClick: (res: Reservation) => void, isContentOpen: boolean, setIsContentOpen: (open: boolean) => void}> = 
 ({reservations, canManageReservations, onCancelClick, isContentOpen, setIsContentOpen}) => (
@@ -1363,9 +1435,7 @@ const EditReservationModal: React.FC<EditReservationModalProps> = ({
             ))}
           </select>
         </div>
-
         {error && <p className="text-red-500 text-center text-sm font-semibold bg-red-100 p-2 rounded-md">{error}</p>}
-        
         <div className="flex justify-end gap-3 pt-4 border-t mt-4">
           <button type="button" onClick={onClose} disabled={isSaving} className="bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors">Cancelar</button>
           <button type="submit" disabled={isSaving} className="flex items-center justify-center gap-2 w-48 bg-estacio-blue text-white font-bold py-2 px-4 rounded-lg hover:bg-opacity-90 disabled:opacity-50">
@@ -1377,5 +1447,4 @@ const EditReservationModal: React.FC<EditReservationModalProps> = ({
   );
 };
 
-
-export default MainScreen;
+export default StudentScreen;

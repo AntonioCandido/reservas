@@ -25,7 +25,7 @@ export interface Environment {
   id: string;
   created_at: string;
   name: string;
-  location: string | null;
+  location: string;
   type_id: string;
   environment_types: { name: string } | null;
   resources: Resource[];
@@ -42,7 +42,7 @@ export interface Reservation {
   users: { name: string; email: string } | null;
   environments: {
     name: string;
-    location: string | null;
+    location: string;
     environment_types?: { name: string; } | null;
   } | null;
 }

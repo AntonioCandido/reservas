@@ -1,3 +1,6 @@
+
+
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   getAllEnvironments, addEnvironment, deleteEnvironment, updateEnvironment,
@@ -110,13 +113,13 @@ const AdminScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, se
       {error && <p className="bg-red-100 text-red-700 p-3 rounded-md mb-4 text-center font-semibold">{error}</p>}
 
       <div className="mb-8 non-printable">
-        <nav className="flex justify-around" aria-label="Tabs de Gestão">
+        <nav className="flex justify-around bg-gray-100 rounded-lg p-1" aria-label="Tabs de Gestão">
           <button
             onClick={() => setView('environments')}
-            className={`flex-1 flex flex-col items-center justify-center py-3 font-semibold transition-colors duration-200 ease-in-out focus:outline-none border-b-4 ${
+            className={`flex-1 flex flex-col items-center justify-center py-2 font-semibold transition-all duration-300 ease-in-out rounded-md ${
               view === 'environments'
-                ? 'border-estacio-blue text-estacio-blue'
-                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                ? 'bg-estacio-blue text-white shadow'
+                : 'text-gray-500 hover:bg-gray-200 hover:text-gray-700'
             }`}
             aria-current={view === 'environments' ? 'page' : undefined}
           >
@@ -125,10 +128,10 @@ const AdminScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, se
           </button>
           <button
             onClick={() => setView('users')}
-            className={`flex-1 flex flex-col items-center justify-center py-3 font-semibold transition-colors duration-200 ease-in-out focus:outline-none border-b-4 ${
+            className={`flex-1 flex flex-col items-center justify-center py-2 font-semibold transition-all duration-300 ease-in-out rounded-md ${
               view === 'users'
-                ? 'border-estacio-blue text-estacio-blue'
-                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                ? 'bg-estacio-blue text-white shadow'
+                : 'text-gray-500 hover:bg-gray-200 hover:text-gray-700'
             }`}
             aria-current={view === 'users' ? 'page' : undefined}
           >
@@ -137,10 +140,10 @@ const AdminScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, se
           </button>
           <button
             onClick={() => setView('types')}
-            className={`flex-1 flex flex-col items-center justify-center py-3 font-semibold transition-colors duration-200 ease-in-out focus:outline-none border-b-4 ${
+            className={`flex-1 flex flex-col items-center justify-center py-2 font-semibold transition-all duration-300 ease-in-out rounded-md ${
               view === 'types'
-                ? 'border-estacio-blue text-estacio-blue'
-                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                ? 'bg-estacio-blue text-white shadow'
+                : 'text-gray-500 hover:bg-gray-200 hover:text-gray-700'
             }`}
             aria-current={view === 'types' ? 'page' : undefined}
           >
@@ -149,10 +152,10 @@ const AdminScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, se
           </button>
           <button
             onClick={() => setView('resources')}
-            className={`flex-1 flex flex-col items-center justify-center py-3 font-semibold transition-colors duration-200 ease-in-out focus:outline-none border-b-4 ${
+            className={`flex-1 flex flex-col items-center justify-center py-2 font-semibold transition-all duration-300 ease-in-out rounded-md ${
               view === 'resources'
-                ? 'border-estacio-blue text-estacio-blue'
-                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                ? 'bg-estacio-blue text-white shadow'
+                : 'text-gray-500 hover:bg-gray-200 hover:text-gray-700'
             }`}
             aria-current={view === 'resources' ? 'page' : undefined}
           >
@@ -161,10 +164,10 @@ const AdminScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, se
           </button>
           <button
             onClick={() => setView('calendar')}
-            className={`flex-1 flex flex-col items-center justify-center py-3 font-semibold transition-colors duration-200 ease-in-out focus:outline-none border-b-4 ${
+            className={`flex-1 flex flex-col items-center justify-center py-2 font-semibold transition-all duration-300 ease-in-out rounded-md ${
               view === 'calendar'
-                ? 'border-estacio-blue text-estacio-blue'
-                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                ? 'bg-estacio-blue text-white shadow'
+                : 'text-gray-500 hover:bg-gray-200 hover:text-gray-700'
             }`}
             aria-current={view === 'calendar' ? 'page' : undefined}
           >
@@ -173,10 +176,10 @@ const AdminScreen: React.FC<Omit<AppContextType, 'page'>> = ({ setPage, user, se
           </button>
           <button
             onClick={() => setView('backup')}
-            className={`flex-1 flex flex-col items-center justify-center py-3 font-semibold transition-colors duration-200 ease-in-out focus:outline-none border-b-4 ${
+            className={`flex-1 flex flex-col items-center justify-center py-2 font-semibold transition-all duration-300 ease-in-out rounded-md ${
               view === 'backup'
-                ? 'border-estacio-blue text-estacio-blue'
-                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                ? 'bg-estacio-blue text-white shadow'
+                : 'text-gray-500 hover:bg-gray-200 hover:text-gray-700'
             }`}
             aria-current={view === 'backup' ? 'page' : undefined}
           >
@@ -638,7 +641,7 @@ const UsersAdminView: React.FC<{ users: User[], refreshData: () => Promise<void>
 
 const EnvironmentsAdminView: React.FC<{ environments: Environment[], types: EnvironmentType[], resources: Resource[], refreshData: () => Promise<void> }> = ({ environments, types, resources, refreshData }) => {
     const [isFormOpen, setIsFormOpen] = useState(false);
-    const [isListOpen, setIsListOpen] = useState(true);
+    const [isListOpen, setIsListOpen] = useState(false);
     const [envToEdit, setEnvToEdit] = useState<Environment | null>(null);
     const [envToDelete, setEnvToDelete] = useState<Environment | null>(null);
     const [envToView, setEnvToView] = useState<Environment | null>(null);
@@ -826,7 +829,7 @@ const EnvironmentEditModal: React.FC<{ isOpen: boolean, onClose: () => void, env
 
     useEffect(() => {
         if (environment) {
-            setFormState({ name: environment.name, location: environment.location || '', type_id: environment.type_id });
+            setFormState({ name: environment.name, location: environment.location, type_id: environment.type_id });
             setSelectedResources(environment.resources.map(r => r.id));
             setError('');
         }
